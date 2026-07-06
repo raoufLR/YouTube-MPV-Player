@@ -41,7 +41,7 @@
 
 ```powershell
 # Clone the repository
-git clone https://github.com/yourusername/YouTubeMpvPlayer.git
+git clone https://github.com/raoufLR/YouTube-MPV-Player.git
 cd YouTubeMpvPlayer
 
 # Install Python dependencies
