@@ -3,6 +3,7 @@ import re
 import subprocess
 import json
 import os
+import sys
 import time
 from typing import Optional
 
@@ -20,12 +21,24 @@ _MAX_RETRIES = 2
 _RETRY_DELAYS = [1.0, 2.0]
 
 
+def _resource_path(relative_path: str) -> str:
+    """Get absolute path to a bundled resource, works for dev and PyInstaller EXE."""
+    try:
+        base_path = sys._MEIPASS  # type: ignore[attr-defined]
+    except AttributeError:
+        base_path = os.getcwd()
+    return os.path.join(base_path, relative_path)
+
+
 class YouTubeAPI:
     def __init__(self, logger: Optional[logging.Logger] = None):
         self.ytdlp_path = self._find_ytdlp()
         self._logger = logger or logging.getLogger(__name__)
 
     def _find_ytdlp(self):
+        bundled = _resource_path("yt-dlp.exe")
+        if os.path.exists(bundled):
+            return bundled
         local = os.path.join(os.getcwd(), "yt-dlp.exe")
         if os.path.exists(local):
             return local

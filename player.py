@@ -16,6 +16,15 @@ QUALITY_MAP = {
 }
 
 
+def _resource_path(relative_path: str) -> str:
+    """Get absolute path to a bundled resource, works for dev and PyInstaller EXE."""
+    try:
+        base_path = sys._MEIPASS  # type: ignore[attr-defined]
+    except AttributeError:
+        base_path = os.getcwd()
+    return os.path.join(base_path, relative_path)
+
+
 class MpvPlayer:
     def __init__(self, logger: Optional[logging.Logger] = None):
         self.process = None
@@ -30,9 +39,9 @@ class MpvPlayer:
 
         self.stop()
 
-        local_mpv = os.path.join(os.getcwd(), "mpv.exe")
-        if os.path.exists(local_mpv):
-            self.mpv_cmd = local_mpv
+        bundled_mpv = _resource_path("mpv.exe")
+        if os.path.exists(bundled_mpv):
+            self.mpv_cmd = bundled_mpv
         elif shutil.which("mpv"):
             self.mpv_cmd = "mpv"
         else:
