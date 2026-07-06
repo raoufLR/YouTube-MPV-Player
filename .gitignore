@@ -1,0 +1,29 @@
+# Build output
+dist/
+build/
+*.spec
+
+# Python cache
+__pycache__/
+*.pyc
+*.pyo
+.pytest_cache/
+
+# User data (auto-generated at runtime)
+User/
+Cache/
+Logs/
+
+# Large binaries (user provides their own)
+mpv.exe
+yt-dlp.exe
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+Thumbs.db
+.DS_Store
