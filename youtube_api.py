@@ -46,10 +46,15 @@ class YouTubeAPI:
 
     def _run_ytdlp(self, cmd: list, timeout: int) -> str:
         last_error = None
+        startupinfo = None
+        creationflags = 0
+        if sys.platform == 'win32':
+            creationflags = subprocess.CREATE_NO_WINDOW
         for attempt in range(1 + _MAX_RETRIES):
             try:
                 result = subprocess.run(
-                    cmd, capture_output=True, text=True, timeout=timeout
+                    cmd, capture_output=True, text=True, timeout=timeout,
+                    creationflags=creationflags,
                 )
                 if result.returncode == 0:
                     return result.stdout
