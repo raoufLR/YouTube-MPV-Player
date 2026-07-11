@@ -3,7 +3,7 @@
   <p><strong>A lightweight, privacy-focused desktop YouTube player</strong></p>
   <p>Stream YouTube videos directly — no browser, no ads, no API keys, no account required.</p>
 <p align="center">
-  <img src="assets/IMAGE.png" width="800">
+  <img src="IMAGE.png" width="800">
 </p>
   <br>
 </div>
