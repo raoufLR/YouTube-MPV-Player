@@ -1,7 +1,7 @@
 <div align="center">
   <h1>🎬 YouTube MPV Player Light</h1>
   <p><strong>A lightweight, privacy-focused desktop YouTube player</strong></p>
-  <p>Stream YouTube videos directly — no browser, no ads, no API keys, no account required.</p>
+  <p>Stream YouTube videos directly — no browser, LOW-END use RAM , no ads, no API keys, no account required.</p>
 <p align="center">
   <img src="IMAGE.png" width="800">
 </p>
