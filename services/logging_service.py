@@ -1,3 +1,4 @@
+import contextlib
 import logging
 import os
 from logging.handlers import RotatingFileHandler
@@ -24,6 +25,7 @@ class LoggingService:
                  console_level: int = logging.INFO,
                  file_level: int = logging.DEBUG):
         self._log_dir = log_dir
+        self._handlers: list[logging.Handler] = []
 
         root = logging.getLogger()
         root.setLevel(logging.DEBUG)
@@ -36,12 +38,18 @@ class LoggingService:
                 datefmt="%H:%M:%S",
             ))
             root.addHandler(console)
-            self._install_file_handler(log_dir, file_level)
+            self._handlers.append(console)
+
+            file_handler = self._install_file_handler(log_dir, file_level)
+            if file_handler is not None:
+                self._handlers.append(file_handler)
 
         # Also covers handlers installed by an embedding host before startup.
         install_redaction(root)
 
-    def _install_file_handler(self, log_dir: str, file_level: int) -> None:
+    def _install_file_handler(
+        self, log_dir: str, file_level: int
+    ) -> logging.Handler | None:
         """Attach the rotating file handler, staying usable when it is not.
 
         The working directory of a launched shortcut is not guaranteed to be
@@ -60,16 +68,29 @@ class LoggingService:
             logging.getLogger(__name__).warning(
                 "File logging disabled (%s): %s", log_dir, exc
             )
-            return
+            return None
 
         file_handler.setLevel(file_level)
         file_handler.setFormatter(logging.Formatter(
             "%(asctime)s [%(levelname)s] %(name)s (%(filename)s:%(lineno)d): %(message)s"
         ))
         logging.getLogger().addHandler(file_handler)
+        return file_handler
 
     def get_logger(self, name: str) -> logging.Logger:
         return logging.getLogger(name)
 
     def shutdown(self):
-        logging.shutdown()
+        """Detach and close only the handlers this service installed.
+
+        A global ``logging.shutdown()`` would also close handlers owned by an
+        embedding host (or pytest) and leaves our file handler attached to a
+        deleted directory between application instances.
+        """
+        root = logging.getLogger()
+        for handler in self._handlers:
+            with contextlib.suppress(Exception):
+                handler.flush()
+                handler.close()
+            root.removeHandler(handler)
+        self._handlers.clear()

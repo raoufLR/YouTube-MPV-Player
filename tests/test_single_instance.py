@@ -31,6 +31,16 @@ def test_lock_file_lives_in_the_data_directory(tmp_path):
         guard.release()
 
 
+def test_owner_pid_reports_the_lock_holder(tmp_path):
+    path = os.path.join(tmp_path, "User", "app.lock")
+    guard = SingleInstanceGuard(path)
+    try:
+        assert guard.acquire() is True
+        assert guard.owner_pid() == os.getpid()
+    finally:
+        guard.release()
+
+
 def test_second_gui_instance_stops_before_starting_services(
     temp_dir, monkeypatch, qapp
 ):
@@ -41,10 +51,15 @@ def test_second_gui_instance_stops_before_starting_services(
     assert holder.acquire() is True
 
     shown = []
+    focused = []
     started = []
     monkeypatch.setattr(
         "PyQt6.QtWidgets.QMessageBox.information",
         lambda *args, **kwargs: shown.append(args) or 0,
+    )
+    monkeypatch.setattr(
+        "ui.window_activation.focus_existing_instance",
+        lambda pid: focused.append(pid) or False,
     )
     monkeypatch.setattr("app.Application.startup", lambda self: started.append(True))
 
@@ -53,8 +68,38 @@ def test_second_gui_instance_stops_before_starting_services(
     finally:
         holder.release()
 
+    assert focused == [os.getpid()]
     assert len(shown) == 1
     assert started == []
+
+
+def test_second_gui_instance_raises_the_primary_window(
+    temp_dir, monkeypatch, qapp
+):
+    from main import main
+
+    monkeypatch.chdir(temp_dir)
+    holder = SingleInstanceGuard(os.path.join(temp_dir, "User", "app.lock"))
+    assert holder.acquire() is True
+
+    shown = []
+    focused = []
+    monkeypatch.setattr(
+        "PyQt6.QtWidgets.QMessageBox.information",
+        lambda *args, **kwargs: shown.append(args) or 0,
+    )
+    monkeypatch.setattr(
+        "ui.window_activation.focus_existing_instance",
+        lambda pid: focused.append(pid) or True,
+    )
+
+    try:
+        assert main([]) == 0
+    finally:
+        holder.release()
+
+    assert focused == [os.getpid()]
+    assert shown == []
 
 
 def test_self_test_reports_a_running_instance(

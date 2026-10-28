@@ -11,7 +11,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Single-instance guard: a PID-aware lock file in `User/` stops a second GUI
   copy (or `--self-test` run) from sharing one profile directory. The second
-  launch shows a notice and exits; locks left by a crash are reclaimed.
+  launch restores and raises the running window, or shows a notice when it
+  cannot; locks left by a crash are reclaimed.
 
 ### Fixed
 

@@ -44,5 +44,12 @@ class SingleInstanceGuard:
         # startup reports the real problem instead of a bogus lock conflict.
         return self._lock.error() == QLockFile.LockError.PermissionError
 
+    def owner_pid(self) -> int:
+        """Return the PID that currently holds the lock, or ``0``."""
+        info = self._lock.getLockInfo()
+        if not info or not info[0]:
+            return 0
+        return int(info[1] or 0)
+
     def release(self) -> None:
         self._lock.unlock()

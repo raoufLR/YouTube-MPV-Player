@@ -1,6 +1,7 @@
 """Logging setup degrades gracefully when the log directory is unusable."""
 
 import logging
+import os
 from logging.handlers import RotatingFileHandler
 
 import pytest
@@ -54,3 +55,16 @@ def test_unusable_directory_does_not_prevent_startup(tmp_path, clean_root_logger
         isinstance(handler, logging.StreamHandler)
         for handler in clean_root_logger.handlers
     )
+
+
+def test_shutdown_detaches_and_closes_its_handlers(tmp_path, clean_root_logger):
+    clean_root_logger.handlers.clear()
+    service = LoggingService(log_dir=str(tmp_path / "Logs"))
+    log_file = tmp_path / "Logs" / "app.log"
+    assert log_file.is_file()
+
+    service.shutdown()
+
+    assert clean_root_logger.handlers == []
+    # Closed on Windows too: a stale handler would lock the file.
+    os.unlink(log_file)

@@ -122,6 +122,12 @@ def main(argv: Sequence[str] | None = None) -> int:
                 error=True,
             )
             return 1
+
+        from ui.window_activation import focus_existing_instance
+
+        if focus_existing_instance(guard.owner_pid()):
+            return 0
+
         from PyQt6.QtWidgets import QMessageBox
 
         QMessageBox.information(
