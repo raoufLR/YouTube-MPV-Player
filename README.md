@@ -1,310 +1,444 @@
 <div align="center">
-  <h1>🎬 YouTube MPV Player Light</h1>
-  <p><strong>A lightweight, privacy-focused desktop YouTube player</strong></p>
-  <p>Stream YouTube videos directly — no browser, LOW-END use RAM , no ads, no API keys, no account required.</p>
-<p align="center">
-  <img src="IMAGE.png" width="800">
-</p>
-  <br>
+  <h1>YouTube MPV Player</h1>
+  <p><strong>A lightweight, privacy-first desktop YouTube player built on MPV and yt-dlp.</strong></p>
+  <p>Search, stream and organise YouTube locally — no browser, no ads, no API keys, no Google account.</p>
+
+  <p>
+    <a href="https://github.com/raoufLR/YouTube-MPV-Player/actions/workflows/ci.yml"><img alt="CI" src="https://github.com/raoufLR/YouTube-MPV-Player/actions/workflows/ci.yml/badge.svg"></a>
+    <img alt="Python 3.14+" src="https://img.shields.io/badge/python-3.14%2B-blue">
+    <img alt="PyQt6 6.11" src="https://img.shields.io/badge/PyQt6-6.11-41cd52">
+    <img alt="Platform" src="https://img.shields.io/badge/platform-Windows-0078d4">
+    <img alt="Tests" src="https://img.shields.io/badge/tests-631-brightgreen">
+    <img alt="Ruff clean" src="https://img.shields.io/badge/lint-ruff%20clean-261230">
+  </p>
+
+  <img src="screenshot.png" alt="YouTube MPV Player home feed" width="900">
 </div>
+
+---
+
+**YouTube MPV Player** is a native desktop client for YouTube. It talks to YouTube through
+[yt-dlp](https://github.com/yt-dlp/yt-dlp) for search and stream resolution, and hands playback to
+[MPV](https://mpv.io/) — a small, fast, GPU-accelerated player. Everything else lives in plain JSON on
+your disk: history, likes, playlists, subscriptions and viewing statistics. Nothing is uploaded, and no
+Google Cloud project or OAuth login is involved.
+
+> Prefer a ready-made binary? Download the portable Windows build from the
+> [latest release](https://github.com/raoufLR/YouTube-MPV-Player/releases/latest).
+
+## Why this player
+
+- **Fast on low-end machines.** No Chromium, no Electron, no ads or trackers — MPV does the decoding.
+- **Your data stays yours.** Per-profile JSON stores, no telemetry, no account required.
+- **Bring your existing library.** Import playlists, likes, watch history and subscriptions straight
+  from a [Google Takeout](#-import-your-google-takeout-archive) archive.
+- **Built like an application, not a script.** Event-driven services, thread-marshalled UI updates,
+  a test suite of 631 tests, and Ruff-clean code.
+
+---
+
+## Screenshots
+
+| Home feed | Settings | yt-dlp updates |
+|-----------|----------|----------------|
+| <img src="screenshot.png" alt="Home feed" width="440"> | <img src="screenshot_settings.png" alt="Settings" width="440"> | <img src="screenshot_settings_updates.png" alt="yt-dlp updates" width="440"> |
 
 ---
 
 ## ✨ Features
 
-- **🔍 YouTube Search** — Full-text search powered by yt-dlp with infinite scroll pagination
-- **▶️ Video Playback** — Streams via MPV with quality selection (360p/480p/720p/1080p/best), including separate DASH video/audio tracks
-- **🎛️ Playback Controls** — Pause/resume, seek, volume, stop, and restart from the now-playing bar or focus-aware keyboard shortcuts (Space / arrows / Escape never hijack text fields, sliders, buttons, or lists)
-- **🔄 Reliable Resolution** — Async stream resolution with request cancellation so rapid clicks never start the wrong video
-- **📜 Watch History** — Auto-saves watched videos (500 cap, dedup, async persistence)
-- **📊 Analytics** — Local, per-profile watch time, videos played, rewatches, and most-watched channels; updates live after playback and can be reset (nothing is uploaded)
-- **❤️ Likes & Watch Later** — Save and organize videos locally, with a dedicated Liked Videos page and live state indicators across Search, History, Playlists, and Home
-- **📂 Playlists** — Create, rename, delete, and manage custom playlists (with built-in Watch Later), with selection preserved across updates
-- **👤 Multi-Profile** — Separate profiles with independent settings, history, and playlists; failed switches keep the current profile intact
-- **🛡️ Data Integrity** — Tolerant load-time validation repairs malformed JSON, rejects unsafe IDs, and keeps `.bak` recovery copies
-- **🔒 Security Boundaries** — Thumbnail fetches are allowlisted and size-capped, yt-dlp ignores planted config files, avatars must be local files, and logs redact signed URLs and tokens
-- **💾 Export / Import** — Versioned data bundles move a profile's settings, history, likes, playlists, and profile details between installs
-- **🎨 Themes** — Default and YouTube-style dark themes applied application-wide, so dialogs, menus, and message boxes match
-- **🪟 Window State** — Size, position, and maximized state are restored on launch and clamped to visible screens
-- **🖼️ Thumbnail Caching** — LRU memory + disk cache with async loading
-- **📋 Paste URL** — Direct playback from any YouTube URL
-- **⚡ Performance** — Cached SVG icons, theme-based card styling, decoded-thumbnail cache, debounced async saves, O(1) video lookups, coalesced home-feed refreshes, smooth scrolling
-- **🔌 No API Keys** — Fully local using yt-dlp (no Google Cloud, no OAuth)
+### Playback & discovery
+
+- **Search** — full-text YouTube search via yt-dlp with infinite-scroll pagination.
+- **Paste a URL** — any YouTube link plays immediately.
+- **Quality control** — 360p / 480p / 720p / 1080p / best, including separate DASH video and audio tracks.
+- **Reliable resolution** — asynchronous stream resolution with newest-request-wins cancellation, so
+  rapid clicks never start the wrong video.
+- **Keyboard-first controls** — focus-aware shortcuts that never steal keys from text fields, sliders,
+  buttons or lists; hold an arrow key to seek or change volume continuously.
+- **Seek preview** — hover the progress slider to see the time under the cursor before you click.
+- **yt-dlp updater** — check for and install yt-dlp releases from Settings, with SHA-256 verification
+  and an atomic swap of the binary.
+
+### Library & organisation
+
+- **Home feed** — Continue Watching, Recommended, Recently Played and more, loaded asynchronously.
+- **Watch history** — automatic, deduplicated, capped at 500 entries, flushed off the GUI thread.
+- **Likes & Watch Later** — saved locally, with live state indicators across every page.
+- **Playlists** — create, rename and delete playlists; Watch Later is built in.
+- **Analytics** — per-profile watch time, videos played, rewatches and most-watched channels; updates
+  live and can be reset locally.
+- **Multi-profile** — independent settings, history and playlists per profile, with avatars. A failed
+  profile switch leaves the current profile intact.
+
+### Data, portability & privacy
+
+- **Google Takeout import** — playlists, liked videos, watch history and subscriptions, selected
+  per category, with skip-or-overwrite conflict handling.
+- **Data bundles** — versioned export/import of a profile's settings, history, likes, playlists and
+  details between installs.
+- **Tolerant persistence** — load-time validation repairs malformed JSON, rejects unsafe IDs and keeps
+  `.bak` recovery copies.
+- **Security boundaries** — thumbnail hosts are allowlisted and size-capped, yt-dlp runs with
+  `--ignore-config` and closed stdin, avatars must be local files, and logs redact signed URLs and tokens.
+
+### Look & feel
+
+- **Themes** — Default and YouTube Dark, applied application-wide, including dialogs, menus and message
+  boxes, with a single source of truth for colours and metrics.
+- **Responsive shell** — collapsible sidebar and a search bar that adapts to the window width.
+- **Window state** — size, position and maximized state are restored and clamped to visible screens.
+- **Accessible by default** — icon buttons carry accessible names and tooltips; playback shortcuts
+  respect focus.
+- **Translation-ready** — every user-facing string goes through `ui/i18n.py` (`tr()` / `trn()`), with
+  Qt `.qm` catalogues loaded automatically; English is the default.
+- **Performance** — cached SVG icons, shared decoded thumbnails, coalesced event bursts, debounced
+  async saves and O(1) video lookups.
 
 ---
 
-## 🖼️ Screenshots
+## 📥 Import your Google Takeout archive
 
-> *Coming soon — run the app to see it in action!*
+Google Takeout is Google's official, free export tool. It can download a complete copy of your YouTube
+data — and this app imports it locally, without sending anything anywhere.
+
+1. Open [takeout.google.com](https://takeout.google.com/) and sign in.
+2. Click **Deselect all**, then tick **YouTube and YouTube Music**.
+3. Create the export and download the `.zip` (usually ready within minutes).
+4. In the app, open **Settings → Google Takeout & Data Import → Import from Google Takeout…**.
+5. Pick the `.zip` — or an already extracted folder — then review what was detected.
+6. Choose the categories to import and whether to skip or overwrite duplicates, then start.
+
+The in-app **💡 How to get Takeout file?** button opens the same guide with step-by-step screenshots of
+Google's flow.
+
+| Found in the archive | Imported as |
+|----------------------|-------------|
+| Liked videos (`Playlists/Liked videos.csv/json`) | Likes |
+| Watch Later | Watch Later playlist |
+| Custom playlists, including modern per-playlist `… _Title_` folders | Playlists |
+| Watch history (JSON or HTML) | Watch history, capped at 500 entries |
+| Subscriptions (`subscriptions.csv/json`) | Subscription list |
+
+Notes:
+
+- Both JSON and CSV exports are supported, including non-English folder and file names (for example
+  Arabic), and both classic and 2026-style Takeout layouts.
+- Missing titles are enriched from watch history and playlist metadata where possible.
+- Imports run on a worker thread with per-item cancellation, so **Cancel** stops immediately and the
+  dialog can be closed safely at any point.
+- Bulk imports publish a single coalesced event per data type, which keeps the UI responsive even with
+  tens of thousands of history rows.
+- The archive is only read, never modified. Extraction uses a temporary staging directory that is
+  removed when the import ends.
 
 ---
 
-## 🚀 Quick Start
+## ⌨️ Keyboard shortcuts
 
-### Prerequisites
+| Key | Action |
+|-----|--------|
+| `Space` | Play / pause |
+| `←` / `→` | Seek back / forward 10 seconds |
+| `↑` / `↓` | Volume up / down |
+| `F` or `F11` | Toggle fullscreen |
+| `Esc` | Stop playback |
 
+Shortcuts are ignored while you are typing in a text field, dragging a slider, or when a dialog is open.
+The complete reference is also available in **Settings → Keyboard Shortcuts**.
+
+---
+
+## 🚀 Quick start
+
+### Requirements
+
+- **Windows 10/11** — the primary target (the codebase itself is portable; CI runs on `windows-latest`)
 - **Python 3.14+**
-- **mpv.exe** ([Download](https://mpv.io/)) — Place in project root
-- **yt-dlp.exe** ([Download](https://github.com/yt-dlp/yt-dlp)) — Place in project root
+- **`mpv.exe`** — download from [mpv.io](https://mpv.io/installation/)
+- **`yt-dlp.exe`** — download from the [yt-dlp releases](https://github.com/yt-dlp/yt-dlp/releases)
 
-### Installation
+Place both executables in the project root (next to `main.py`). The app resolves them from the bundle,
+the project directory or `PATH` — never from an untrusted working directory.
+
+### Run from source
 
 ```powershell
-# Clone the repository
 git clone https://github.com/raoufLR/YouTube-MPV-Player.git
-cd YouTubeMpvPlayer
+cd YouTube-MPV-Player
 
-# Install Python dependencies
+python -m venv .venv
+.venv\Scripts\Activate.ps1
 pip install -r requirements.txt
 
-# Run the application
+# Put mpv.exe and yt-dlp.exe in this folder, then:
 python main.py
 ```
 
-> **First run** creates `User/` and `Cache/` directories automatically.
-> Profile data lives under `User/profiles/<opaque-id>/`; existing `User/<name>/`
-> directories are migrated automatically on startup.
+On first launch the app creates `User/` and `Cache/`. Each profile lives under
+`User/profiles/<opaque-id>/`; legacy `User/<name>/` directories are migrated automatically.
 
-### Build a Portable Executable
+### Build a portable executable
 
 ```powershell
-pip install pyinstaller
+pip install -r requirements-dev.txt
 python build.py
-# Output: dist\youtube_video_player.exe (~107 MB, single file)
+# Output: dist\youtube_video_player.exe (single file, bundles mpv and yt-dlp)
 ```
+
+See [BUILD.md](BUILD.md) for signing, icon and release notes.
 
 ---
 
 ## 🏗️ Architecture
 
 ```
-main.py → Application (composition root)
-           ├── EventBus (thread-safe pub/sub)
-           ├── ServiceContainer (DI with 14 services)
-           └── MainWindow (PyQt6 UI)
-               ├── SidebarWidget (navigation)
-               ├── HeaderWidget (search + quality selector)
-               └── Pages
-                   ├── HomePage       — Personalized feed sections
-                   ├── SearchPage     — Infinite-scroll search results
-                   ├── HistoryPage    — Watch history with context menus
-                   ├── PlaylistsPage  — Playlist CRUD with split panel
-                   ├── LikedPage      — Liked videos with live updates
-                   ├── AnalyticsPage  — Local playback statistics
-                   └── SettingsPage   — Preferences with auto-save
+main.py ──▶ Application (composition root)
+             ├── EventBus / ThreadSafeEventBus   thread-safe pub/sub, weak refs, coalescing
+             ├── ServiceContainer                dependency injection for 16 services
+             └── MainWindow (PyQt6)
+                 ├── SidebarWidget              collapsible navigation
+                 ├── HeaderWidget               search field + quality selector
+                 ├── NowPlayingBar              transport controls
+                 └── Pages
+                     ├── HomePage               Continue Watching, Recommended, Recently Played
+                     ├── SearchPage             infinite-scroll results
+                     ├── HistoryPage            history with context menus
+                     ├── PlaylistsPage          playlist CRUD
+                     ├── LikedPage              liked videos
+                     ├── AnalyticsPage          local playback statistics
+                     ├── ProfilePage            profile & avatar management
+                     └── SettingsPage           preferences, shortcuts, Takeout import, updates
 ```
+
+**Principles**
+
+- **Event-driven.** Services publish typed events on the bus; pages subscribe and rebuild only the
+  parts they own. Bulk operations can wrap work in `EventBus.coalesced()` so a thousand item writes
+  produce one UI refresh instead of a thousand.
+- **Thread marshalling.** Background publishers use `ThreadSafeEventBus.publish_to_main_thread()`,
+  bridged to Qt signals, so widgets are only touched on the GUI thread.
+- **Dependency injection.** `app/service_container.py` wires services in one place, which keeps pages
+  testable with fakes.
+- **Atomic persistence.** `core/json_store.py` writes through a temporary file, keeps `.bak` copies and
+  validates on load.
 
 ### Services
 
 | Service | Responsibility |
-|---------|---------------|
-| **LoggingService** | Centralized logging |
-| **UserManagerService** | Multi-profile management |
-| **SettingsService** | User preferences (quality, theme, volume, speed, etc.) |
-| **PlayerService** | MPV lifecycle + cached playback state (position, duration, pause, volume) |
+|---------|----------------|
+| **LoggingService** | Centralised logging with URL/token redaction |
+| **UserManagerService** | Profile registry, switching and migration |
+| **SettingsService** | Preferences (quality, theme, volume, speed, language, updates) |
+| **PlayerService** | MPV lifecycle and cached playback state |
 | **StreamResolverService** | yt-dlp resolution to direct media URLs (video + optional DASH audio) |
-| **PlaybackService** | Async playback orchestration with newest-request-wins cancellation |
-| **SearchService** | YouTube search via yt-dlp |
-| **ThumbnailCacheService** | LRU memory + disk thumbnail cache |
-| **UserProfileService** | Profile & avatar management |
-| **HistoryService** | Watch history (event-driven, async flush) |
-| **AnalyticsService** | Per-profile playback statistics (watch time, plays, rewatches, channels) |
+| **PlaybackService** | Async orchestration with newest-request-wins cancellation |
+| **SearchService** | YouTube search and pagination via yt-dlp |
+| **ThumbnailCacheService** | LRU memory + disk thumbnail cache with allowlisted downloads |
+| **UserProfileService** | Display name, avatar and profile metadata |
+| **HistoryService** | Watch history (event-driven, async flush, 500-entry cap) |
+| **AnalyticsService** | Per-profile watch time, plays, rewatches and channels |
 | **LikesService** | Liked videos |
-| **PlaylistService** | Playlists CRUD + Watch Later |
-| **RecommendationService** | Video recommendations |
-
-### Event Flow
-
-```
-User Action → Qt Signal → MainWindow → Service → EventBus → Subscribers
-```
-
-The app uses an **event-driven architecture** with 30 event types to decouple components. All UI updates are marshalled to the main thread via Qt signals.
+| **PlaylistService** | Playlist CRUD + Watch Later |
+| **RecommendationService** | Home-feed recommendations |
+| **DataImportService** | Google Takeout inspection and import orchestration |
+| **YtDlpUpdateService** | Release checks, SHA-256 verification and atomic binary updates |
 
 ---
 
-## 📁 Project Structure
+## 📁 Project structure
 
 ```
-YouTubeMpvPlayer/
-├── main.py                     # Application entry point
-├── player.py                   # MPV subprocess wrapper (async IPC worker, DASH audio)
+YouTube-MPV-Player/
+├── main.py                     # Entry point (--self-test for a headless smoke test)
+├── player.py                   # MPV subprocess wrapper (async IPC, DASH audio)
 ├── youtube_api.py              # yt-dlp wrapper (search + stream extraction)
-├── build.py                    # Canonical build script
-├── youtube_video_player.spec   # PyInstaller spec file
-├── requirements.txt            # Python dependencies
+├── build.py                    # Canonical PyInstaller build script
+├── youtube_video_player.spec   # PyInstaller spec
 │
-├── app/                        # Application bootstrap & DI
-│   ├── application.py          # Composition root
-│   └── service_container.py    # 14-service DI registry
+├── app/                        # Bootstrap and dependency injection
+│   ├── application.py
+│   └── service_container.py
 │
-├── core/                       # Event system + shared helpers
-│   ├── event_bus.py            # Thread-safe pub/sub with weak refs
-│   ├── events.py               # 30 event dataclass types
-│   ├── json_store.py           # Atomic JSON persistence with .bak recovery
-│   ├── playback_errors.py      # Cancellation / resolution errors
-│   ├── security.py             # URL/path validation, log redaction, file modes
-│   └── quality.py              # Quality map + URL/video-id validation
+├── core/                       # Cross-cutting primitives
+│   ├── event_bus.py            # Pub/sub with weak refs and coalescing
+│   ├── events.py               # 33 typed event dataclasses
+│   ├── json_store.py           # Atomic JSON with .bak recovery
+│   ├── security.py             # URL/path validation, redaction, file modes
+│   ├── quality.py              # Quality map and ID validation
+│   ├── validation.py           # Load-time data repair
+│   ├── data_bundle.py          # Versioned export/import bundles
+│   └── takeout_parser.py       # Takeout ZIP/folder/CSV/HTML parsing
 │
-├── services/                   # Business logic (14 services)
+├── models/                     # Dataclasses: playlist, profile, user profile, settings
+├── services/                   # 16 business-logic services
 │
-├── models/                     # Data models (4 dataclasses)
-│   ├── playlist.py
-│   ├── profile.py
-│   ├── user_profile.py
-│   └── user_settings.py
-│
-├── ui/                         # PyQt6 UI components
-│   ├── main_window.py          # Main window with page stack
-│   ├── sidebar_widget.py       # Navigation sidebar
-│   ├── header_widget.py        # Search bar + quality selector
-│   ├── now_playing_bar.py      # Mini player controls
-│   ├── avatar_widget.py        # Profile avatar
-│   ├── event_dispatcher.py     # Qt signal bridge
-│   ├── icons.py                # SVG icon collection (cached renders)
+├── ui/                         # PyQt6 widgets
+│   ├── main_window.py          # Window shell and page stack
+│   ├── sidebar_widget.py       # Collapsible navigation
+│   ├── header_widget.py        # Search + quality selector
+│   ├── now_playing_bar.py      # Mini player
+│   ├── takeout_import_dialog.py# Takeout wizard + beginner guide
+│   ├── i18n.py                 # tr() / trn() and .qm loading
+│   ├── event_dispatcher.py     # EventBus → Qt signal bridge
+│   ├── icons.py                # Cached SVG icon rendering
 │   ├── thumbnail_pixmaps.py    # Shared decoded-thumbnail cache
-│   ├── status_bar_widget.py    # Status feedback (generation-safe messages)
 │   ├── shortcuts.py            # Focus-aware playback key filter
+│   ├── status_bar_widget.py    # Generation-safe status messages
 │   ├── window_state.py         # Geometry restore/save with clamping
-│   ├── themes/                 # ThemeManager system
-│   ├── pages/                  # Page widgets
-│   └── components/             # Reusable widgets (skeleton, video card)
+│   ├── page_registry.py        # Page metadata and navigation
+│   ├── themes/                 # DefaultTheme + YouTubeTheme
+│   ├── pages/                  # Eight pages (see architecture)
+│   └── components/             # Reusable widgets (video card, home section, skeleton)
 │
-├── tests/                      # Test suite (542 tests)
-├── tools/                      # Development tools (performance benchmark)
-├── User/                       # User data (profiles, settings, history)
-│   └── profiles/<id>/          # Opaque per-profile directory
-│       ├── profile.json        # Profile registry metadata
-│       ├── user_profile.json   # Display name / avatar
-│       ├── settings.json
-│       ├── history.json
-│       ├── likes.json
-│       ├── analytics.json      # Local playback statistics
-│       └── playlists/*.json
-├── Cache/thumbnails/           # Thumbnail disk cache
-├── mpv.exe / yt-dlp.exe       # Local binaries
+├── tests/                      # 631 pytest tests (offscreen Qt)
+├── tools/                      # Performance benchmark harness
 │
-├── BUILD.md                    # Build instructions
+├── User/                       # Runtime data (git-ignored)
+│   └── profiles/<id>/          # settings, history, likes, analytics, playlists
+├── Cache/thumbnails/           # Thumbnail disk cache (git-ignored)
+│
+├── BUILD.md                    # Build and release instructions
 ├── CHANGELOG.md                # Release history
-├── PROJECT_MEMORY.md           # Detailed architecture docs
-└── README.md                   # This file
+├── TODO.md                     # Remediation roadmap and completed audits
+└── PROJECT_MEMORY.md           # Detailed architecture notes
 ```
 
 ---
 
-## 🧪 Testing
+## 🧪 Testing & code quality
 
 ```powershell
-# Install development dependencies
 pip install -r requirements-dev.txt
 
-# Run all tests
-python -m pytest -q
-
-# Run with coverage
-python -m pytest --cov --cov-report=term-missing
-
-# Headless application/service smoke test
-python main.py --self-test
+python -m pytest -q                        # full suite
+python -m pytest --cov --cov-report=term   # branch coverage
+python -m ruff check .                     # lint (E, F, I, UP, SIM, TCH)
+python main.py --self-test                 # headless bootstrap + service smoke test
 ```
 
-The test suite covers the service layer, playback orchestration/cancellation, MPV IPC, application bootstrap, shutdown, entry-point behavior, and the Qt UI (pages, keyboard shortcut routing, window-state persistence, theming) with mocked yt-dlp/mpv subprocesses. CI runs the same checks on Windows.
+Current baseline: **630 passed, 1 skipped** out of 631 collected, **Ruff clean**, on Python 3.14.
+CI (`.github/workflows/ci.yml`) runs the suite offscreen on Windows for every push and pull request.
 
-Current baseline: **542 tests, 78.6% coverage, Ruff clean** (Python 3.14+ on Windows CI). Layout regressions found by the live UI smoke run are pinned by tests: home cards must not overlap after the skeleton→video transition, History/Liked lists must fill the page, Search must show its prompt on first load and after clearing, and home thumbnails delivered asynchronously must reach every card. Security boundaries are covered by `tests/test_security.py` and `tests/test_thumbnail_cache_service.py` (allowlist, redirects, size caps, path rejection, log redaction, atomic avatar copies); analytics by `tests/test_analytics_service.py` and `tests/test_analytics_page.py` (event pairing, repair, profile switching, reset, live refresh); rendering caches by `tests/test_icons.py` and `tests/test_thumbnail_pixmaps.py`.
+The tests cover the service layer, playback orchestration and cancellation, MPV IPC, application
+bootstrap and shutdown, the data-import pipeline, and the Qt UI (pages, shortcut routing, window-state
+persistence, theming, thumbnails) with mocked yt-dlp/mpv subprocesses. Security boundaries are pinned by
+`tests/test_security.py` and `tests/test_thumbnail_cache_service.py`; Takeout parsing by
+`tests/test_takeout_parser.py`; bulk-import behaviour by `tests/test_data_import_service.py`.
 
-UI performance has a repeatable harness:
+UI performance has a repeatable, network-free harness:
 
 ```powershell
-python tools/benchmark_perf.py            # table (median ms per operation)
+python tools/benchmark_perf.py              # median ms per operation
 python tools/benchmark_perf.py --json out.json
 ```
 
-It runs offscreen, needs no network, and covers icon rendering, `VideoCard` construction, home-row population (cold and warm pixmap caches), thumbnail disk reads, EventBus publishing, and JSON persistence.
+It measures icon rendering, `VideoCard` construction, home-row population (cold and warm pixmap caches),
+thumbnail disk reads, EventBus publishing and JSON persistence.
 
 ---
 
-## 🔒 Security
+## 🔒 Security & privacy
 
-All security boundaries live in `core/security.py`:
-
-- **Network** — thumbnails may only be fetched from YouTube image hosts (`ytimg.com`, `youtube.com`, `ggpht.com`, `googleusercontent.com`) over http/https on ports 80/443, with no credentials, no private/loopback addresses, at most 3 manually re-validated redirects, `image/*` content types, and a 5 MiB cap.
-- **Subprocesses** — every yt-dlp call passes `--ignore-config` (a config file next to the executable can otherwise inject `--exec`), `--no-playlist` for single videos, and closed stdin. The executable is resolved from the bundle or `PATH`, never the working directory.
-- **Local files** — avatar sources must be plain local paths (no URLs, UNC/device paths, or Windows alternate data streams) and are copied atomically. JSON stores, backups, logs, and thumbnail caches are owner-only on POSIX.
-- **Logging** — a redaction filter scrubs signed URL queries (`sqp`/`rs`), tokens, credentials, bearer/basic values, and control characters before anything reaches disk or the console.
-
-> **Data is not encrypted at rest.** The previous `EncryptionService` was unreachable and stored its machine-derived key beside the data, so it was removed along with the `cryptography` dependency. Protection comes from per-profile directories, OS user ACLs, private file modes, and log redaction.
+- **No account, no cloud.** Search and streaming use the bundled yt-dlp; there is no OAuth flow, no API
+  key and no analytics endpoint.
+- **Network allowlist.** Thumbnails may only be fetched from YouTube image hosts over http/https on
+  ports 80/443, with no credentials or private/loopback addresses, at most 3 re-validated redirects,
+  `image/*` content types and a 5 MiB cap.
+- **Subprocess hygiene.** Every yt-dlp call uses `--ignore-config`, `--no-playlist` for single videos and
+  closed stdin; the executable is resolved from the bundle or `PATH`, never the working directory.
+- **Local files only.** Avatars must be plain local paths (no URLs, UNC/device paths or NTFS alternate
+  data streams) and are copied atomically. JSON stores, backups, logs and caches are owner-only on POSIX.
+- **Redacted logs.** Signed URL parameters (`sqp`, `rs`), tokens, credentials and control characters are
+  scrubbed before anything reaches disk or the console.
+- **Takeout imports are read-only.** Archives are read in a temporary staging directory that is deleted
+  afterwards; no archive content is uploaded anywhere.
+- **Not encrypted at rest.** Per-profile directories, OS user ACLs, private file modes and log redaction
+  are the protection model. Do not store the data folder on a shared drive.
 
 ---
 
-## 🛠️ Technologies
+## 🛠️ Technology stack
 
-| Tech | Version | Purpose |
-|------|---------|---------|
-| [Python](https://www.python.org/) | 3.14 | Main language |
-| [PyQt6](https://www.riverbankcomputing.com/software/pyqt/) | 6.11+ | GUI framework |
-| [MPV](https://mpv.io/) | 0.41.0 | Video playback engine |
-| [yt-dlp](https://github.com/yt-dlp/yt-dlp) | 2026.08.19 | YouTube search + streaming |
-| [PyInstaller](https://pyinstaller.org/) | 6.22.3 | Executable packaging |
-| [pytest](https://pytest.org/) | — | Testing framework |
-| [requests](https://requests.readthedocs.io/) | — | Thumbnail HTTP downloads |
+| Technology | Version | Purpose |
+|------------|---------|---------|
+| [Python](https://www.python.org/) | 3.14+ | Application language |
+| [PyQt6](https://www.riverbankcomputing.com/software/pyqt/) | 6.11 | Desktop UI |
+| [MPV](https://mpv.io/) | 0.41 | Video playback engine |
+| [yt-dlp](https://github.com/yt-dlp/yt-dlp) | bundled | Search and stream resolution |
+| [Requests](https://requests.readthedocs.io/) | 2.34 | Thumbnail downloads |
+| [PyInstaller](https://pyinstaller.org/) | 6.22 | Portable executable packaging |
+| [pytest](https://pytest.org/) / [pytest-cov](https://pytest-cov.readthedocs.io/) | 9.1 / 7.1 | Tests and coverage |
+| [Ruff](https://docs.astral.sh/ruff/) | 0.17 | Linting |
 
 ---
 
 ## ⚡ Performance
 
-| Benchmark | Before | After | Reduction |
-|-----------|--------|-------|-----------|
-| 100 SettingsService.set() | 138.4 ms | 1.75 ms | **98.7%** |
-| 10,000 EventBus publish | 3693 ms | 15.9 ms | **99.6%** |
-| 100 `_update_item_display` | 18.9 ms | 0.61 ms | **96.8%** |
-| SVG icon render (median) | 0.057 ms | 0.0002 ms | **99.6%** |
-| `VideoCard` construction | 1.76 ms | 0.62 ms | **65%** |
-| Home row populate, warm pixmaps (per card) | 4.28 ms | 1.30 ms | **70%** |
+Measured on the reference machine with `tools/benchmark_perf.py` and the Milestone 7 optimisation pass:
 
-Optimizations include: debounced async saves, O(1) video lookup dict, item text cache, uniform item sizes, HTTP session pooling, batch thumbnail processing, and module-level constants. Milestone 7 added measured UI wins: SVG icons are cached per `(SVG, size)`, card labels are styled by the theme instead of five per-widget stylesheets, the hover drop shadow is created on demand and detached when idle, decoded/scaled thumbnails are shared through Qt's `QPixmapCache`, and home rows are built with updates disabled. A full home page (7 × 10 cards) builds in roughly 43 ms of card construction instead of 123 ms; re-populating it with cached thumbnails drops from ~300 ms to ~91 ms. First-load JPEG decoding still happens on the GUI thread (~1.5 ms per image), noted as a future improvement.
+| Benchmark | Before | After | Change |
+|-----------|--------|-------|--------|
+| 100 `SettingsService.set()` | 138.4 ms | 1.75 ms | **−98.7%** |
+| 10,000 EventBus publishes | 3693 ms | 15.9 ms | **−99.6%** |
+| 100 `_update_item_display` calls | 18.9 ms | 0.61 ms | **−96.8%** |
+| SVG icon render (median) | 0.057 ms | 0.0002 ms | **−99.6%** |
+| `VideoCard` construction | 1.76 ms | 0.62 ms | **−65%** |
+| Home row populate, warm pixmaps (per card) | 4.28 ms | 1.30 ms | **−70%** |
+
+Highlights: debounced asynchronous saves, O(1) video lookup, item text caching, uniform card sizes, HTTP
+session pooling, batched thumbnail work, theme-driven card styling, shared decoded pixmaps and coalesced
+event bursts during bulk imports. Cold-cache JPEG decoding still happens on the GUI thread (~1.5 ms per
+image) — a known future improvement.
+
+---
+
+## 🗺️ Roadmap
+
+Completed audits and remediation items are tracked in [TODO.md](TODO.md); release history lives in
+[CHANGELOG.md](CHANGELOG.md). Possible next steps:
+
+- Search result caching between queries
+- A light theme alongside Default and YouTube Dark
+- Drag-and-drop playlist reordering
+- Off-thread decoding for cold-cache thumbnails
+- More translation catalogues (the UI is already fully wrapped in `tr()`)
 
 ---
 
 ## 🤝 Contributing
 
-Contributions are welcome! Here's how to get started:
+1. Fork the repository and create a branch: `git checkout -b feature/my-feature`
+2. Install dev dependencies: `pip install -r requirements-dev.txt`
+3. Make the change, add tests, and run `python -m pytest -q` plus `python -m ruff check .`
+4. Open a pull request describing the motivation and the verification you ran
 
-1. Fork the repository
-2. Create a feature branch (`git checkout -b feature/amazing-feature`)
-3. Commit your changes (`git commit -m 'Add amazing feature'`)
-4. Push to the branch (`git push origin feature/amazing-feature`)
-5. Open a Pull Request
-
-### Development Priorities
-
-See [PROJECT_MEMORY.md](PROJECT_MEMORY.md) for the full TODO list and [CHANGELOG.md](CHANGELOG.md) for release history. Key areas:
-
-- Search result caching
-- Light theme stylesheet and playlist drag-and-drop reorder
-- Auto-update for yt-dlp
-- Off-thread decoding for cold-cache thumbnails
+Bug reports are welcome — include the app version, Windows version, and the relevant lines from `Logs/`
+(URLs and tokens are already redacted).
 
 ---
 
 ## 📄 License
 
-This project is for personal and educational use. It uses:
+This project is released for personal and educational use. It bundles or depends on:
 
 - **[MPV](https://mpv.io/)** — GPLv2
 - **[yt-dlp](https://github.com/yt-dlp/yt-dlp)** — Unlicense
 - **[PyQt6](https://www.riverbankcomputing.com/software/pyqt/)** — GPLv3
 
+Respect YouTube's Terms of Service and the rights of content creators.
+
 ---
 
 ## 🙏 Acknowledgements
 
-- [yt-dlp](https://github.com/yt-dlp/yt-dlp) — YouTube streaming without API keys
-- [MPV](https://mpv.io/) — The best video player
+- [yt-dlp](https://github.com/yt-dlp/yt-dlp) — YouTube extraction without API keys
+- [MPV](https://mpv.io/) — the best small video player
 - [PyQt6](https://www.riverbankcomputing.com/software/pyqt/) — Python Qt bindings
-- [PyInstaller](https://pyinstaller.org/) — Cross-platform executable packaging
+- [PyInstaller](https://pyinstaller.org/) — portable Windows packaging
 
 ---
 
 <div align="center">
-  <sub>Built with ❤️ for privacy-conscious YouTube viewers</sub>
+  <sub>Built for privacy-conscious YouTube viewers.</sub>
 </div>
