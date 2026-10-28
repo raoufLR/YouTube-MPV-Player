@@ -1,6 +1,6 @@
 """
 Core Module
-============
+===========
 
 This package provides the application's internal communication system using an event bus pattern.
 All inter-component communication flows through this event-driven architecture to eliminate
@@ -8,6 +8,77 @@ tight coupling and enable loose coupling between services and UI.
 """
 
 from .event_bus import EventBus
-from .events import *
+from .events import (  # noqa: F401 -- re-exported for `from core import ...` users
+    ApplicationClosingEvent,
+    ApplicationEvent,
+    ApplicationStartedEvent,
+    HistoryUpdatedEvent,
+    LikeChangedEvent,
+    PlaybackErrorEvent,
+    PlaylistCreatedEvent,
+    PlaylistDeletedEvent,
+    PlaylistUpdatedEvent,
+    ProfileChangedEvent,
+    ProfileCreatedEvent,
+    ProfileDeletedEvent,
+    ProfileLoadedEvent,
+    RecommendationsFailedEvent,
+    RecommendationsLoadedEvent,
+    RecommendationsLoadingEvent,
+    SearchCancelledEvent,
+    SearchCompletedEvent,
+    SearchFailedEvent,
+    SearchStartedEvent,
+    SettingsChangedEvent,
+    StreamResolvedEvent,
+    StreamResolveFailedEvent,
+    StreamResolvingEvent,
+    ThumbnailFailedEvent,
+    ThumbnailLoadedEvent,
+    UpdateAvailableEvent,
+    UpdateCompletedEvent,
+    UpdateFailedEvent,
+    UpdateUpToDateEvent,
+    VideoPausedEvent,
+    VideoStartedEvent,
+    VideoStoppedEvent,
+    WatchLaterToggledEvent,
+)
 
-__all__ = ['EventBus']
+__all__ = [
+    "EventBus",
+    "ApplicationClosingEvent",
+    "ApplicationEvent",
+    "ApplicationStartedEvent",
+    "HistoryUpdatedEvent",
+    "LikeChangedEvent",
+    "PlaybackErrorEvent",
+    "PlaylistCreatedEvent",
+    "PlaylistDeletedEvent",
+    "PlaylistUpdatedEvent",
+    "ProfileChangedEvent",
+    "ProfileCreatedEvent",
+    "ProfileDeletedEvent",
+    "ProfileLoadedEvent",
+    "RecommendationsFailedEvent",
+    "RecommendationsLoadedEvent",
+    "RecommendationsLoadingEvent",
+    "SearchCancelledEvent",
+    "SearchCompletedEvent",
+    "SearchFailedEvent",
+    "SearchStartedEvent",
+    "SettingsChangedEvent",
+    "StreamResolvedEvent",
+    "StreamResolveFailedEvent",
+    "StreamResolvingEvent",
+    "ThumbnailFailedEvent",
+    "ThumbnailLoadedEvent",
+    "UpdateAvailableEvent",
+    "UpdateCompletedEvent",
+    "UpdateFailedEvent",
+    "UpdateUpToDateEvent",
+    "VideoPausedEvent",
+    "VideoStartedEvent",
+    "VideoStoppedEvent",
+    "WatchLaterToggledEvent",
+]

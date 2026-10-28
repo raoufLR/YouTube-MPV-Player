@@ -21,24 +21,37 @@ Design decisions:
 Storage layout (when disk_cache=True):
     Cache/
     └── thumbnails/
-        ├── {md5(url)}.jpg
+        ├── {sha256(url)}.jpg
         └── ...
 """
 
+import contextlib
 import hashlib
 import logging
 import os
-import shutil
 import tempfile
 import threading
 import time
 from collections import OrderedDict
-from typing import Optional, Dict, Any
+from typing import TYPE_CHECKING
+from urllib.parse import urljoin
 
 import requests
 
-from core import EventBus
-from core.events import ThumbnailLoadedEvent, ThumbnailFailedEvent
+from core.events import ThumbnailFailedEvent, ThumbnailLoadedEvent
+from core.security import (
+    DEFAULT_THUMBNAIL_HOSTS,
+    ensure_private_dir,
+    ensure_private_file,
+    redact_text,
+    redact_url,
+    validate_fetch_url,
+)
+
+if TYPE_CHECKING:
+    from collections.abc import Iterable
+
+    from core import EventBus
 
 _logger = logging.getLogger(__name__)
 
@@ -48,23 +61,30 @@ DEFAULT_TTL = 86400 * 7  # 7 days
 DEFAULT_MAX_DISK_SIZE = 100 * 1024 * 1024  # 100 MB
 MAX_QUEUE_SIZE = 200
 BATCH_SIZE = 10
+MAX_THUMBNAIL_BYTES = 5 * 1024 * 1024  # 5 MB
+MAX_REDIRECTS = 3
+_CHUNK_SIZE = 64 * 1024
 
 
 class ThumbnailCacheService:
     """Thumbnail loader with LRU memory cache and optional disk cache"""
 
-    def __init__(self, event_bus: Optional[EventBus] = None,
+    def __init__(self, event_bus: EventBus | None = None,
                  max_memory_entries: int = DEFAULT_MEMORY_SIZE,
                  max_disk_size: int = DEFAULT_MAX_DISK_SIZE,
                  disk_cache: bool = True,
                  disk_dir: str = DEFAULT_DISK_DIR,
-                 ttl: int = DEFAULT_TTL):
+                 ttl: int = DEFAULT_TTL,
+                 allowed_hosts: Iterable[str] | None = None):
         self._event_bus = event_bus
         self._max_memory = max_memory_entries
         self._max_disk_size = max_disk_size
         self._disk_cache = disk_cache
         self._disk_dir = disk_dir
         self._ttl = ttl
+        self._allowed_hosts = (
+            DEFAULT_THUMBNAIL_HOSTS if allowed_hosts is None else tuple(allowed_hosts)
+        )
 
         self._lock = threading.RLock()
         self._memory: OrderedDict = OrderedDict()
@@ -73,12 +93,13 @@ class ThumbnailCacheService:
         self._queue: list = []
         self._queue_event = threading.Event()
         self._running = False
-        self._worker: Optional[threading.Thread] = None
+        self._worker: threading.Thread | None = None
 
-        self._http: Optional[requests.Session] = None
+        self._http: requests.Session | None = None
 
         if self._disk_cache:
             os.makedirs(self._disk_dir, exist_ok=True)
+            ensure_private_dir(self._disk_dir)
             self.cleanup_expired()
             self._enforce_disk_size_limit()
 
@@ -144,7 +165,7 @@ class ThumbnailCacheService:
     # Public API
     # ------------------------------------------------------------------
 
-    def load_thumbnail_data(self, url: str) -> Optional[bytes]:
+    def load_thumbnail_data(self, url: str) -> bytes | None:
         """
         Synchronous API — returns cached bytes immediately, or None on miss.
 
@@ -152,6 +173,8 @@ class ThumbnailCacheService:
         ThumbnailLoadedEvent so UI can apply the icon.
         """
         if not url:
+            return None
+        if self._validate_url(url) is None:
             return None
 
         # 1. Memory cache
@@ -174,6 +197,8 @@ class ThumbnailCacheService:
         """Preemptively enqueue a thumbnail for background download."""
         if not url:
             return
+        if self._validate_url(url) is None:
+            return
         if self._get_memory(url) is not None:
             return
         if self._disk_cache and self._get_disk(url) is not None:
@@ -193,6 +218,7 @@ class ThumbnailCacheService:
             self._disk_dir = disk_dir
         if self._disk_cache:
             os.makedirs(self._disk_dir, exist_ok=True)
+            ensure_private_dir(self._disk_dir)
             self.cleanup_expired()
             self._enforce_disk_size_limit()
 
@@ -212,9 +238,8 @@ class ThumbnailCacheService:
         now = time.time()
         for filename in os.listdir(self._disk_dir):
             filepath = os.path.join(self._disk_dir, filename)
-            if os.path.isfile(filepath):
-                if now - os.path.getmtime(filepath) > self._ttl:
-                    os.remove(filepath)
+            if os.path.isfile(filepath) and now - os.path.getmtime(filepath) > self._ttl:
+                os.remove(filepath)
 
     def _enforce_disk_size_limit(self):
         """Evict oldest disk cache files until total size is under max_disk_size."""
@@ -244,7 +269,7 @@ class ThumbnailCacheService:
             except OSError:
                 pass
 
-    def stats(self) -> Dict[str, int]:
+    def stats(self) -> dict[str, int]:
         """Return cache statistics."""
         with self._lock:
             mem = len(self._memory)
@@ -260,7 +285,7 @@ class ThumbnailCacheService:
     # Memory cache (LRU)
     # ------------------------------------------------------------------
 
-    def _get_memory(self, url: str) -> Optional[bytes]:
+    def _get_memory(self, url: str) -> bytes | None:
         with self._lock:
             if url in self._memory:
                 self._memory.move_to_end(url)
@@ -281,10 +306,12 @@ class ThumbnailCacheService:
     # ------------------------------------------------------------------
 
     def _disk_path(self, url: str) -> str:
-        digest = hashlib.md5(url.encode("utf-8")).hexdigest()
+        # SHA-256 keeps the cache key opaque and collision-resistant; the URL
+        # itself is never used as a filename.
+        digest = hashlib.sha256(url.encode("utf-8")).hexdigest()
         return os.path.join(self._disk_dir, f"{digest}.jpg")
 
-    def _get_disk(self, url: str) -> Optional[bytes]:
+    def _get_disk(self, url: str) -> bytes | None:
         filepath = self._disk_path(url)
         if not os.path.exists(filepath):
             return None
@@ -294,39 +321,121 @@ class ThumbnailCacheService:
                 return None
             with open(filepath, "rb") as f:
                 return f.read()
-        except IOError:
+        except OSError:
             return None
 
     def _store_disk(self, url: str, data: bytes):
         filepath = self._disk_path(url)
         dir_path = os.path.dirname(filepath)
-        tmp_path = None
+        tmp_path = ""
         try:
-            with tempfile.NamedTemporaryFile(
-                mode="wb", dir=dir_path, delete=False
-            ) as tmp:
+            fd, tmp_path = tempfile.mkstemp(
+                prefix=".thumb-", suffix=".tmp", dir=dir_path
+            )
+            with os.fdopen(fd, "wb") as tmp:
                 tmp.write(data)
-                tmp_path = tmp.name
-            shutil.move(tmp_path, filepath)
+                tmp.flush()
+                os.fsync(tmp.fileno())
+            ensure_private_file(tmp_path)
+            os.replace(tmp_path, filepath)
+            tmp_path = ""
             self._enforce_disk_size_limit()
-        except (IOError, OSError) as e:
+        except (OSError, ValueError) as e:
             _logger.warning("Failed to store thumbnail on disk: %s", e)
+        finally:
             if tmp_path and os.path.exists(tmp_path):
-                os.remove(tmp_path)
+                with contextlib.suppress(OSError):
+                    os.remove(tmp_path)
 
     # ------------------------------------------------------------------
     # Network
     # ------------------------------------------------------------------
 
-    def _fetch_from_network(self, url: str) -> Optional[bytes]:
+    def _validate_url(self, url: object) -> str | None:
+        """Return a fetch-safe URL, or ``None`` when it must not be fetched."""
         try:
-            http = self._get_http()
-            resp = http.get(url, timeout=5)
-            resp.raise_for_status()
-            return resp.content
-        except (requests.RequestException, IOError, OSError) as e:
-            _logger.debug("Failed to fetch thumbnail from %s: %s", url, e)
+            return validate_fetch_url(url, self._allowed_hosts)
+        except ValueError as exc:
+            _logger.debug(
+                "Refusing thumbnail URL %s: %s",
+                redact_url(url if isinstance(url, str) else ""),
+                redact_text(exc),
+            )
             return None
+
+    def _fetch_from_network(self, url: str) -> bytes | None:
+        safe_url = self._validate_url(url)
+        if safe_url is None:
+            return None
+        try:
+            return self._download_image(safe_url)
+        except (requests.RequestException, ValueError, OSError) as e:
+            _logger.debug(
+                "Failed to fetch thumbnail from %s: %s",
+                redact_url(safe_url),
+                redact_text(e),
+            )
+            return None
+
+    def _download_image(self, url: str) -> bytes | None:
+        """Download an image with validated redirects and a hard size cap."""
+        current = url
+        for _ in range(MAX_REDIRECTS + 1):
+            safe_url = validate_fetch_url(current, self._allowed_hosts)
+            response = self._get_http().get(
+                safe_url,
+                timeout=5,
+                stream=True,
+                allow_redirects=False,
+            )
+            try:
+                if response.status_code in (301, 302, 303, 307, 308):
+                    location = response.headers.get("Location", "")
+                    if not location:
+                        return None
+                    current = urljoin(safe_url, location)
+                    continue
+
+                response.raise_for_status()
+
+                content_type = (
+                    response.headers.get("Content-Type", "")
+                    .split(";", 1)[0]
+                    .strip()
+                    .lower()
+                )
+                if content_type and not content_type.startswith("image/"):
+                    _logger.debug(
+                        "Refusing non-image thumbnail response (%s) from %s",
+                        redact_text(content_type),
+                        redact_url(safe_url),
+                    )
+                    return None
+
+                length = response.headers.get("Content-Length", "")
+                if length.isdigit() and int(length) > MAX_THUMBNAIL_BYTES:
+                    _logger.debug(
+                        "Refusing oversized thumbnail from %s",
+                        redact_url(safe_url),
+                    )
+                    return None
+
+                chunks = bytearray()
+                for chunk in response.iter_content(_CHUNK_SIZE):
+                    if not chunk:
+                        continue
+                    chunks.extend(chunk)
+                    if len(chunks) > MAX_THUMBNAIL_BYTES:
+                        _logger.debug(
+                            "Thumbnail exceeded %d bytes: %s",
+                            MAX_THUMBNAIL_BYTES,
+                            redact_url(safe_url),
+                        )
+                        return None
+                return bytes(chunks) or None
+            finally:
+                response.close()
+        return None
 
     # ------------------------------------------------------------------
     # Queue
@@ -337,13 +446,13 @@ class ThumbnailCacheService:
             if url in self._pending:
                 return
             if len(self._queue) >= MAX_QUEUE_SIZE:
-                _logger.debug("Queue full, skipping thumbnail: %s", url)
+                _logger.debug("Queue full, skipping thumbnail: %s", redact_url(url))
                 return
             self._pending.add(url)
             self._queue.append((url, self._on_download_complete))
         self._queue_event.set()
 
-    def _on_download_complete(self, url: str, data: Optional[bytes]):
+    def _on_download_complete(self, url: str, data: bytes | None):
         with self._lock:
             self._pending.discard(url)
 

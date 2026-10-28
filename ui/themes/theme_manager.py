@@ -1,13 +1,28 @@
 from PyQt6.QtCore import QObject, pyqtSignal
 
 from .default_theme import DefaultTheme
+from .theme_context import set_active_theme
 from .youtube_theme import YouTubeTheme
-
 
 THEME_REGISTRY = {
     "default": DefaultTheme,
     "youtube_dark": YouTubeTheme,
 }
+
+
+def hex_to_rgba(color: str, alpha: float) -> str:
+    """Render a ``#RRGGBB`` token as a Qt ``rgba()`` string."""
+    value = str(color or "").strip().lstrip("#")
+    if len(value) == 3:
+        value = "".join(ch * 2 for ch in value)
+    if len(value) == 6:
+        try:
+            red, green, blue = (int(value[i:i + 2], 16) for i in (0, 2, 4))
+        except ValueError:
+            pass
+        else:
+            return f"rgba({red}, {green}, {blue}, {alpha:g})"
+    return color
 
 
 class ThemeManager(QObject):
@@ -39,6 +54,7 @@ class ThemeManager(QObject):
         cls = THEME_REGISTRY[theme_name]
         self._theme = cls()
         self._current_theme_name = theme_name
+        set_active_theme(self._theme)
         self.theme_changed.emit(theme_name)
 
     def save_theme(self, theme_name: str):
@@ -75,6 +91,7 @@ class ThemeManager(QObject):
 
     def stylesheet(self) -> str:
         t = self._theme
+        accent_soft = hex_to_rgba(t.ACCENT_PRIMARY, 0.15)
         return f"""
 QMainWindow, QWidget#centralWidget {{
     background-color: {t.BG_PRIMARY};
@@ -309,6 +326,11 @@ QLabel#emptyState {{
     padding: 40px;
 }}
 
+QLabel#loadMoreLabel {{
+    color: {t.EMPTY_STATE};
+    font-size: 13px;
+}}
+
 QLabel#duration {{
     color: {t.TEXT_PRIMARY};
     font-size: 12px;
@@ -325,6 +347,33 @@ QLabel#statValue {{
 }}
 
 QLabel#statLabel {{
+    font-size: 12px;
+    color: {t.TEXT_SECONDARY};
+}}
+
+QLabel#pageSubtitle {{
+    font-size: 13px;
+    color: {t.TEXT_SECONDARY};
+    padding-bottom: 4px;
+}}
+
+QWidget#analyticsCard {{
+    background-color: {t.BG_CARD};
+    border-radius: {t.RADIUS_LARGE};
+}}
+
+QWidget#analyticsChannelRow {{
+    background-color: {t.BG_CARD};
+    border-radius: {t.RADIUS_MEDIUM};
+}}
+
+QLabel#analyticsChannelName {{
+    font-size: 13px;
+    font-weight: 600;
+    color: {t.TEXT_PRIMARY};
+}}
+
+QLabel#analyticsChannelCount {{
     font-size: 12px;
     color: {t.TEXT_SECONDARY};
 }}
@@ -398,6 +447,32 @@ QStatusBar {{
 
 QStatusBar::item {{
     border: none;
+}}
+
+QLabel#statusLabel {{
+    color: {t.TEXT_SECONDARY};
+    font-size: 12px;
+    padding: 0 12px;
+}}
+
+QLabel#statusLabel[error="true"] {{
+    color: {t.DANGER};
+}}
+
+QPushButton#statusActionButton {{
+    font-size: 11px;
+    padding: 2px 8px;
+}}
+
+QProgressBar#statusProgress {{
+    background-color: {t.SKELETON_BG};
+    border: none;
+    border-radius: 6px;
+}}
+
+QProgressBar#statusProgress::chunk {{
+    background-color: {t.ACCENT_PRIMARY};
+    border-radius: 6px;
 }}
 
 QMenu {{
@@ -500,7 +575,7 @@ QPushButton#navButton:hover {{
 }}
 
 QPushButton#navButton:checked {{
-    background-color: rgba(62, 166, 255, 0.15);
+    background-color: {accent_soft};
     color: {t.ACCENT_PRIMARY};
     font-weight: 600;
 }}
@@ -531,10 +606,52 @@ QPushButton#profileButton:hover {{
     border-color: {t.ACCENT_PRIMARY};
 }}
 
+QWidget#sidebar[collapsed="true"] QPushButton#navButton,
+QWidget#sidebar[collapsed="true"] QPushButton#profileButton {{
+    text-align: center;
+    padding: 10px 0;
+    margin: 1px 12px;
+}}
+
+QWidget#sidebar[collapsed="true"] QPushButton#navButton:hover,
+QWidget#sidebar[collapsed="true"] QPushButton#profileButton:hover {{
+    border-color: {t.BORDER};
+}}
+
 QWidget#searchHeader {{
     background-color: {t.BG_PRIMARY};
     border-bottom: 1px solid {t.BORDER};
     padding: 12px 20px;
+}}
+
+QLabel#qualityLabel {{
+    color: {t.TEXT_SECONDARY};
+    font-size: 11px;
+    font-weight: 500;
+}}
+
+QLabel#historyCount {{
+    color: {t.TEXT_SECONDARY};
+    font-size: 12px;
+    padding-left: 10px;
+}}
+
+QLabel#playlistPanelLabel {{
+    color: {t.TEXT_SECONDARY};
+    font-size: 13px;
+    font-weight: 600;
+    padding: 8px 4px 0 4px;
+}}
+
+QLabel#playlistTitle {{
+    color: {t.TEXT_PRIMARY};
+    font-size: 18px;
+    font-weight: 700;
+}}
+
+QLabel#playlistInfo {{
+    color: {t.TEXT_SECONDARY};
+    font-size: 12px;
 }}
 
 QLineEdit#searchInput {{
@@ -556,6 +673,11 @@ QLineEdit#searchInput::placeholder {{
     color: {t.TEXT_PLACEHOLDER};
 }}
 
+QWidget#embeddedVideoContainer {{
+    background-color: {t.VIDEO_BG};
+    border-radius: {t.RADIUS_MEDIUM};
+}}
+
 QWidget#videoCard {{
     background-color: {t.BG_CARD};
     border-radius: {t.RADIUS_LARGE};
@@ -563,6 +685,31 @@ QWidget#videoCard {{
 
 QWidget#videoCard:hover {{
     background-color: {t.BG_HOVER};
+}}
+
+QLabel#videoCardThumb {{
+    background-color: {t.BG_HOVER};
+    border-radius: {t.RADIUS_LARGE};
+}}
+
+QLabel#videoCardTitle {{
+    font-size: 13px;
+    font-weight: 600;
+    color: {t.TEXT_PRIMARY};
+}}
+
+QLabel#videoCardMeta {{
+    font-size: 11px;
+    color: {t.TEXT_SECONDARY};
+}}
+
+QLabel#cardStatus {{
+    color: #FFFFFF;
+    font-size: 11px;
+    font-weight: 600;
+    background-color: rgba(0, 0, 0, 0.78);
+    border-radius: 4px;
+    padding: 2px 7px;
 }}
 
 QLabel#videoTitle {{
@@ -587,6 +734,82 @@ QWidget#settingsCategoryCard {{
     padding: 16px;
 }}
 
+QLabel#settingsSectionTitle {{
+    font-size: 16px;
+    font-weight: 700;
+    color: {t.TEXT_PRIMARY};
+}}
+
+QLabel#settingsDescription {{
+    color: {t.TEXT_SECONDARY};
+    font-size: 12px;
+}}
+
+QLabel#shortcutKey {{
+    color: {t.TEXT_SECONDARY};
+    font-weight: 600;
+}}
+
+QLabel#updateStatus {{
+    color: {t.TEXT_SECONDARY};
+}}
+
+QLabel#updateStatus[error="true"] {{
+    color: {t.DANGER};
+    font-weight: 600;
+}}
+
+QLabel#takeoutTitle {{
+    font-size: 16px;
+    font-weight: 700;
+    color: {t.TEXT_PRIMARY};
+}}
+
+QLabel#takeoutSubtitle {{
+    color: {t.TEXT_SECONDARY};
+    font-size: 12px;
+}}
+
+QFrame#takeoutCard {{
+    background-color: {t.SURFACE_RAISED};
+    border-radius: {t.RADIUS_MEDIUM};
+}}
+
+QLabel#takeoutStepTitle {{
+    font-size: 13px;
+    font-weight: 700;
+    color: {t.ACCENT_PRIMARY};
+}}
+
+QLabel#takeoutStepText {{
+    font-size: 12px;
+    color: {t.TEXT_SECONDARY};
+}}
+
+QLabel#takeoutSectionTitle {{
+    font-size: 12px;
+    font-weight: 700;
+    color: {t.TEXT_PRIMARY};
+}}
+
+QLabel#takeoutPath {{
+    font-size: 11px;
+    color: {t.TEXT_SECONDARY};
+}}
+
+QLabel#takeoutStatus {{
+    font-size: 11px;
+    color: {t.ACCENT_PRIMARY};
+}}
+
+QPushButton#takeoutSecondaryButton {{
+    font-size: 11px;
+    padding: 4px 12px;
+    background-color: {t.BG_HOVER};
+    border: 1px solid {t.BORDER};
+    border-radius: 4px;
+}}
+
 QLabel#historyDateHeader {{
     font-size: 15px;
     font-weight: 700;
@@ -598,6 +821,12 @@ QWidget#profileStatsCard {{
     background-color: {t.BG_CARD};
     border-radius: 12px;
     padding: 20px;
+}}
+
+QLabel#profileName {{
+    font-size: 22px;
+    font-weight: 700;
+    color: {t.TEXT_PRIMARY};
 }}
 
 QWidget#playlistCard {{
@@ -654,7 +883,7 @@ QPushButton#sectionTab:hover {{
 }}
 
 QPushButton#sectionTab:checked {{
-    background-color: rgba(62, 166, 255, 0.15);
+    background-color: {accent_soft};
     color: {t.ACCENT_PRIMARY};
     font-weight: 600;
 }}
@@ -662,8 +891,16 @@ QPushButton#sectionTab:checked {{
 QWidget#nowPlayingBar {{
     background-color: {t.NOW_PLAYING_BG};
     border-top: 1px solid {t.NOW_PLAYING_BORDER};
-    min-height: 64px;
-    max-height: 64px;
+}}
+
+QLabel#nowPlayingThumb {{
+    background-color: {t.BG_HOVER};
+    border-radius: 6px;
+}}
+
+QLabel#nowPlayingTime {{
+    font-size: 10px;
+    color: {t.TEXT_SECONDARY};
 }}
 
 QLabel#nowPlayingTitle {{
@@ -696,6 +933,27 @@ QPushButton#nowPlayingBtn:pressed {{
 
 QWidget#homeSection {{
     background-color: transparent;
+}}
+
+QScrollArea#homeSectionScroll {{
+    background-color: transparent;
+    border: none;
+}}
+
+QScrollArea#homeSectionScroll QScrollBar:horizontal {{
+    height: 6px;
+    background-color: transparent;
+}}
+
+QScrollArea#homeSectionScroll QScrollBar::handle:horizontal {{
+    background-color: {t.SCROLLBAR_HANDLE};
+    border-radius: 3px;
+    min-width: 30px;
+}}
+
+QScrollArea#homeSectionScroll QScrollBar::add-line:horizontal,
+QScrollArea#homeSectionScroll QScrollBar::sub-line:horizontal {{
+    width: 0;
 }}
 
 QLabel#homeSectionTitle {{

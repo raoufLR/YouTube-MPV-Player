@@ -1,15 +1,26 @@
 import time
+from typing import TYPE_CHECKING
 
-from PyQt6.QtWidgets import (
-    QDialog, QVBoxLayout, QHBoxLayout, QLabel, QPushButton,
-    QListWidget, QListWidgetItem, QMessageBox, QInputDialog,
-    QApplication,
-)
-from PyQt6.QtCore import Qt, QSize, pyqtSignal
+from PyQt6.QtCore import QSize, Qt, pyqtSignal
 from PyQt6.QtGui import QFont
+from PyQt6.QtWidgets import (
+    QApplication,
+    QDialog,
+    QHBoxLayout,
+    QInputDialog,
+    QLabel,
+    QListWidget,
+    QListWidgetItem,
+    QMessageBox,
+    QPushButton,
+    QVBoxLayout,
+)
 
-from models import Profile
 from ui.avatar_widget import AvatarWidget
+from ui.i18n import tr
+
+if TYPE_CHECKING:
+    from models import Profile
 
 
 class ProfileManagerDialog(QDialog):
@@ -19,7 +30,7 @@ class ProfileManagerDialog(QDialog):
         super().__init__(parent)
         self._user_manager = user_manager_service
         self._picked_name = None
-        self.setWindowTitle("Profile Manager")
+        self.setWindowTitle(tr("Profile Manager"))
         self.setFixedSize(520, 450)
         self.setModal(True)
         self._setup_ui()
@@ -29,7 +40,7 @@ class ProfileManagerDialog(QDialog):
         layout = QVBoxLayout()
         layout.setSpacing(10)
 
-        title = QLabel("Manage Profiles")
+        title = QLabel(tr("Manage Profiles"))
         title.setAlignment(Qt.AlignmentFlag.AlignCenter)
         f = QFont()
         f.setPointSize(14)
@@ -45,23 +56,23 @@ class ProfileManagerDialog(QDialog):
 
         btn_layout = QHBoxLayout()
 
-        self._switch_btn = QPushButton("Switch To")
+        self._switch_btn = QPushButton(tr("Switch To"))
         self._switch_btn.clicked.connect(self._on_switch_selected)
         btn_layout.addWidget(self._switch_btn)
 
-        self._create_btn = QPushButton("Create")
+        self._create_btn = QPushButton(tr("Create"))
         self._create_btn.clicked.connect(self._on_create)
         btn_layout.addWidget(self._create_btn)
 
-        self._rename_btn = QPushButton("Rename")
+        self._rename_btn = QPushButton(tr("Rename"))
         self._rename_btn.clicked.connect(self._on_rename)
         btn_layout.addWidget(self._rename_btn)
 
-        self._duplicate_btn = QPushButton("Duplicate")
+        self._duplicate_btn = QPushButton(tr("Duplicate"))
         self._duplicate_btn.clicked.connect(self._on_duplicate)
         btn_layout.addWidget(self._duplicate_btn)
 
-        self._delete_btn = QPushButton("Delete")
+        self._delete_btn = QPushButton(tr("Delete"))
         self._delete_btn.setObjectName("dangerButton")
         self._delete_btn.clicked.connect(self._on_delete)
         btn_layout.addWidget(self._delete_btn)
@@ -69,7 +80,7 @@ class ProfileManagerDialog(QDialog):
         layout.addLayout(btn_layout)
 
         close_layout = QHBoxLayout()
-        self._close_btn = QPushButton("Close")
+        self._close_btn = QPushButton(tr("Close"))
         self._close_btn.clicked.connect(self.accept)
         close_layout.addStretch()
         close_layout.addWidget(self._close_btn)
@@ -79,10 +90,12 @@ class ProfileManagerDialog(QDialog):
 
     def _refresh(self):
         self._list.clear()
-        current = self._user_manager.current_profile_name()
+        current = self._user_manager.current_profile_name() or ""
         profiles = self._user_manager.list_profiles()
         for p in profiles:
-            self._add_profile_item(p, is_current=(p.name == current))
+            self._add_profile_item(
+                p, is_current=(p.name.casefold() == current.casefold())
+            )
 
     def _add_profile_item(self, profile: Profile, is_current: bool = False):
         avatar = AvatarWidget(50)
@@ -98,10 +111,10 @@ class ProfileManagerDialog(QDialog):
             except (OSError, ValueError):
                 last_opened = ""
 
-        suffix = " (current)" if is_current else ""
+        suffix = tr(" (current)") if is_current else ""
         display = f"{profile.name}{suffix}"
         if last_opened:
-            display += f"\nLast used: {last_opened}"
+            display += "\n" + tr("Last used: {time}").format(time=last_opened)
 
         item = QListWidgetItem(display)
         item.setData(Qt.ItemDataRole.UserRole, profile.name)
@@ -111,9 +124,13 @@ class ProfileManagerDialog(QDialog):
     def _on_switch(self, item):
         name = item.data(Qt.ItemDataRole.UserRole)
         if name:
-            current = self._user_manager.current_profile_name()
-            if name == current:
-                QMessageBox.information(self, "Already Active", f"Profile '{name}' is already active.")
+            current = self._user_manager.current_profile_name() or ""
+            if name.casefold() == str(current).casefold():
+                QMessageBox.information(
+                    self,
+                    tr("Already Active"),
+                    tr("Profile '{name}' is already active.").format(name=name),
+                )
                 return
             self._picked_name = name
             self.profile_switched.emit(name)
@@ -125,64 +142,122 @@ class ProfileManagerDialog(QDialog):
             self._on_switch(item)
 
     def _on_create(self):
-        name, ok = QInputDialog.getText(self, "Create Profile", "Profile name:")
-        if ok and name.strip():
-            p = self._user_manager.create_profile(name.strip())
-            if p is None:
-                QMessageBox.warning(self, "Error", f"Cannot create profile '{name}'.")
-            self._refresh()
+        name, ok = QInputDialog.getText(self, tr("Create Profile"), tr("Profile name:"))
+        if not ok:
+            return
+        name = name.strip()
+        if not name:
+            return
+        profile = self._user_manager.create_profile(name)
+        if profile is None:
+            QMessageBox.warning(
+                self,
+                tr("Cannot Create Profile"),
+                tr("A profile named '{name}' already exists or the name is invalid.").format(
+                    name=name
+                ),
+            )
+        self._refresh()
 
     def _on_rename(self):
         item = self._list.currentItem()
         if not item:
-            QMessageBox.information(self, "Select", "Select a profile to rename.")
+            QMessageBox.information(self, tr("Select"), tr("Select a profile to rename."))
             return
         name = item.data(Qt.ItemDataRole.UserRole)
-        if name and name.lower() == "default":
-            QMessageBox.warning(self, "Cannot Rename", "The Default profile cannot be renamed.")
+        if name and name.casefold() == "default":
+            QMessageBox.warning(
+                self, tr("Cannot Rename"), tr("The Default profile cannot be renamed.")
+            )
             return
-        if name:
-            new_name, ok = QInputDialog.getText(self, "Rename Profile", "New name:", text=name)
-            if ok and new_name.strip() and new_name.strip() != name:
-                self._user_manager.rename_profile(name, new_name.strip())
-                self._refresh()
+        if not name:
+            return
+        new_name, ok = QInputDialog.getText(
+            self, tr("Rename Profile"), tr("New name:"), text=name
+        )
+        if not ok:
+            return
+        new_name = new_name.strip()
+        if not new_name or new_name == name:
+            return
+        if not self._user_manager.rename_profile(name, new_name):
+            QMessageBox.warning(
+                self,
+                tr("Cannot Rename Profile"),
+                tr("'{name}' is already in use or the name is invalid.").format(
+                    name=new_name
+                ),
+            )
+        self._refresh()
 
     def _on_duplicate(self):
         item = self._list.currentItem()
         if not item:
-            QMessageBox.information(self, "Select", "Select a profile to duplicate.")
+            QMessageBox.information(
+                self, tr("Select"), tr("Select a profile to duplicate.")
+            )
             return
         name = item.data(Qt.ItemDataRole.UserRole)
-        if name:
-            new_name, ok = QInputDialog.getText(
-                self, "Duplicate Profile", "New profile name:", text=f"{name} (Copy)"
+        if not name:
+            return
+        new_name, ok = QInputDialog.getText(
+            self,
+            tr("Duplicate Profile"),
+            tr("New profile name:"),
+            text=tr("{name} (Copy)").format(name=name),
+        )
+        if not ok:
+            return
+        new_name = new_name.strip()
+        if not new_name:
+            return
+        if self._user_manager.duplicate_profile(name, new_name) is None:
+            QMessageBox.warning(
+                self,
+                tr("Cannot Duplicate Profile"),
+                tr("'{name}' is already in use or the profile could not be copied.").format(
+                    name=new_name
+                ),
             )
-            if ok and new_name.strip():
-                self._user_manager.duplicate_profile(name, new_name.strip())
-                self._refresh()
+        self._refresh()
 
     def _on_delete(self):
         item = self._list.currentItem()
         if not item:
-            QMessageBox.information(self, "Select", "Select a profile to delete.")
+            QMessageBox.information(
+                self, tr("Select"), tr("Select a profile to delete.")
+            )
             return
         name = item.data(Qt.ItemDataRole.UserRole)
-        if name and name.lower() == "default":
-            QMessageBox.warning(self, "Cannot Delete", "The Default profile cannot be deleted.")
-            return
-        if name:
-            current = self._user_manager.current_profile_name()
-            if name == current:
-                QMessageBox.warning(self, "In Use", "Cannot delete the currently active profile. Switch first.")
-                return
-            reply = QMessageBox.question(
-                self, "Delete Profile",
-                f"Delete profile '{name}'? All data will be lost.",
-                QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No
+        if name and name.casefold() == "default":
+            QMessageBox.warning(
+                self, tr("Cannot Delete"), tr("The Default profile cannot be deleted.")
             )
-            if reply == QMessageBox.StandardButton.Yes:
-                self._user_manager.delete_profile(name)
-                self._refresh()
+            return
+        if not name:
+            return
+        current = self._user_manager.current_profile_name() or ""
+        if name.casefold() == str(current).casefold():
+            QMessageBox.warning(
+                self,
+                tr("In Use"),
+                tr("Cannot delete the currently active profile. Switch first."),
+            )
+            return
+        reply = QMessageBox.question(
+            self,
+            tr("Delete Profile"),
+            tr("Delete profile '{name}'? All data will be lost.").format(name=name),
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+        )
+        if reply == QMessageBox.StandardButton.Yes:
+            if not self._user_manager.delete_profile(name):
+                QMessageBox.warning(
+                    self,
+                    tr("Cannot Delete Profile"),
+                    tr("Profile '{name}' could not be deleted.").format(name=name),
+                )
+            self._refresh()
 
     @staticmethod
     def open_manager(user_manager_service, parent=None):

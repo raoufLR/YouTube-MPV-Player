@@ -54,6 +54,7 @@ class BaseTheme:
     SLIDER_SUB: str = "#3EA6FF"
 
     # Special
+    VIDEO_BG: str = "#000000"
     NOW_PLAYING_BG: str = "#1E1E1E"
     NOW_PLAYING_BORDER: str = "#3C3C3C"
     EMPTY_STATE: str = "#888888"

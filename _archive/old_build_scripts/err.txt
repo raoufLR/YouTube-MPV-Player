@@ -1,2 +1,0 @@
-02:57:38 [INFO] app.service_container: Starting service initialization
-02:57:38 [INFO] app.service_container: All services initialized

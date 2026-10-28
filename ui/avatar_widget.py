@@ -1,9 +1,8 @@
 import os
 
-from PyQt6.QtWidgets import QWidget, QLabel, QVBoxLayout, QFileDialog
-from PyQt6.QtCore import Qt, QRect, QSize
-from PyQt6.QtGui import QPixmap, QPainter, QBrush, QColor, QFont, QIcon
-
+from PyQt6.QtCore import QRect, Qt
+from PyQt6.QtGui import QBrush, QColor, QFont, QIcon, QPainter, QPixmap
+from PyQt6.QtWidgets import QFileDialog, QWidget
 
 DEFAULT_COLORS = [
     "#e74c3c", "#3498db", "#2ecc71", "#f39c12",

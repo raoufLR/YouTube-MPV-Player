@@ -1,6 +1,8 @@
-from PyQt6.QtWidgets import QWidget, QVBoxLayout, QLabel
 from PyQt6.QtCore import Qt, QTimer
-from PyQt6.QtGui import QPainter, QColor, QBrush
+from PyQt6.QtGui import QBrush, QColor, QPainter
+from PyQt6.QtWidgets import QWidget
+
+from ui.themes.theme_context import active_theme
 
 
 class SkeletonWidget(QWidget):
@@ -20,9 +22,10 @@ class SkeletonWidget(QWidget):
         painter = QPainter(self)
         painter.setRenderHint(QPainter.RenderHint.Antialiasing)
 
-        brightness = 40 + self._phase * 3
-        base = QColor(brightness, brightness, brightness)
-        lighter = QColor(brightness + 10, brightness + 10, brightness + 10)
+        theme = active_theme()
+        pulse = 100 + self._phase * 3
+        base = QColor(theme.SKELETON_BG).lighter(pulse)
+        lighter = QColor(theme.SKELETON_CHUNK).lighter(pulse)
 
         painter.setBrush(QBrush(base))
         painter.setPen(Qt.PenStyle.NoPen)

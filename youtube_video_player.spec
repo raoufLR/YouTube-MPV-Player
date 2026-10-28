@@ -29,6 +29,7 @@ a = Analysis(
     binaries=[
         ('mpv.exe', './'),
         ('yt-dlp.exe', './'),
+        ('d3dcompiler_43.dll', './'),
     ],
     datas=[],  # User/ and Cache/ are auto-created at runtime
 )

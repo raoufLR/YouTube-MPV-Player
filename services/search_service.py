@@ -1,7 +1,6 @@
 import logging
-from typing import Optional
 
-from core.events import SearchStartedEvent, SearchCompletedEvent, SearchFailedEvent
+from core.events import SearchCompletedEvent, SearchFailedEvent, SearchStartedEvent
 from youtube_api import YouTubeAPI
 
 

@@ -6,9 +6,9 @@ Usage: python build.py
 """
 
 import os
-import sys
 import shutil
 import subprocess
+import sys
 
 print("=" * 60)
 print("YouTube MPV Player - Build Script")
@@ -24,7 +24,7 @@ for item in ['build', 'dist']:
         print(f"[OK] Removed {item}/")
 
 # ── Verify required files exist ─────────────────────────────────────────
-required = ['mpv.exe', 'yt-dlp.exe', 'youtube_video_player.spec']
+required = ['mpv.exe', 'yt-dlp.exe', 'd3dcompiler_43.dll', 'youtube_video_player.spec']
 for f in required:
     if os.path.exists(f):
         print(f"[OK] Found {f}")
@@ -61,7 +61,7 @@ try:
             print("\n" + "=" * 60)
             print("BUILD SUCCESSFUL!")
             print("=" * 60)
-            print(f"Run: dist\\youtube_video_player.exe")
+            print("Run: dist\\youtube_video_player.exe")
             sys.exit(0)
         else:
             print(f"\n[ERROR] Executable not found at {exe_path}")

@@ -2,14 +2,15 @@ import logging
 import re
 import threading
 import time
-from typing import Dict, List, Optional, Set, Tuple
 
-from youtube_api import YouTubeAPI
 from core.events import (
-    RecommendationsLoadingEvent, RecommendationsLoadedEvent, RecommendationsFailedEvent,
+    RecommendationsFailedEvent,
+    RecommendationsLoadedEvent,
+    RecommendationsLoadingEvent,
 )
+from youtube_api import YouTubeAPI
 
-STOP_WORDS: Set[str] = {
+STOP_WORDS: set[str] = {
     "the", "a", "an", "is", "are", "was", "were", "be", "been", "being",
     "have", "has", "had", "do", "does", "did", "will", "would", "can", "could",
     "shall", "should", "may", "might", "must", "to", "of", "in", "for", "on",
@@ -44,25 +45,25 @@ MAX_LIKED = 8
 
 
 class RecommendationService:
-    def __init__(self, youtube_api: Optional[YouTubeAPI] = None,
+    def __init__(self, youtube_api: YouTubeAPI | None = None,
                  event_bus=None, logger=None):
         self._youtube_api = youtube_api or YouTubeAPI()
         self._event_bus = event_bus
         self._logger = logger or logging.getLogger(__name__)
         self._lock = threading.RLock()
-        self._cache: Dict[str, Tuple[float, list]] = {}
+        self._cache: dict[str, tuple[float, list]] = {}
 
     # ------------------------------------------------------------------
     # Public API
     # ------------------------------------------------------------------
 
-    def get_continue_watching(self, history_service, max_count: int = MAX_CONTINUE_WATCHING) -> List[dict]:
+    def get_continue_watching(self, history_service, max_count: int = MAX_CONTINUE_WATCHING) -> list[dict]:
         history = history_service.get_all() if history_service else []
         # Return the most recent videos that were started but not finished
         return history[:max_count]
 
     def get_recommended(self, history_service, likes_service,
-                        playlist_service, max_count: int = MAX_RECOMMENDED) -> List[dict]:
+                        playlist_service, max_count: int = MAX_RECOMMENDED) -> list[dict]:
         cached = self._get_cached("recommended")
         if cached is not None:
             return cached
@@ -91,7 +92,7 @@ class RecommendationService:
         self._set_cached("recommended", results)
         return results
 
-    def get_trending(self, max_count: int = MAX_TRENDING) -> List[dict]:
+    def get_trending(self, max_count: int = MAX_TRENDING) -> list[dict]:
         cached = self._get_cached("trending")
         if cached is not None:
             return cached
@@ -106,7 +107,7 @@ class RecommendationService:
         self._set_cached("trending", results)
         return results
 
-    def get_history_based(self, history_service, max_count: int = MAX_HISTORY_BASED) -> List[dict]:
+    def get_history_based(self, history_service, max_count: int = MAX_HISTORY_BASED) -> list[dict]:
         cached = self._get_cached("history_based")
         if cached is not None:
             return cached
@@ -128,17 +129,17 @@ class RecommendationService:
         self._set_cached("history_based", results)
         return results
 
-    def get_recently_played(self, history_service, max_count: int = MAX_RECENTLY_PLAYED) -> List[dict]:
+    def get_recently_played(self, history_service, max_count: int = MAX_RECENTLY_PLAYED) -> list[dict]:
         if not history_service:
             return []
         return history_service.get_recent(max_count)
 
-    def get_watch_later_preview(self, playlist_service, max_count: int = MAX_WATCH_LATER) -> List[dict]:
+    def get_watch_later_preview(self, playlist_service, max_count: int = MAX_WATCH_LATER) -> list[dict]:
         if not playlist_service:
             return []
         return playlist_service.get_watch_later()[:max_count]
 
-    def get_liked_preview(self, likes_service, max_count: int = MAX_LIKED) -> List[dict]:
+    def get_liked_preview(self, likes_service, max_count: int = MAX_LIKED) -> list[dict]:
         if not likes_service:
             return []
         return likes_service.get_liked_videos()[:max_count]
@@ -148,9 +149,9 @@ class RecommendationService:
     # ------------------------------------------------------------------
 
     def _extract_keywords(self, history_service, likes_service,
-                          playlist_service=None) -> List[Tuple[str, int]]:
-        titles: List[str] = []
-        channels: List[str] = []
+                          playlist_service=None) -> list[tuple[str, int]]:
+        titles: list[str] = []
+        channels: list[str] = []
 
         if history_service:
             for entry in history_service.get_all():
@@ -177,7 +178,7 @@ class RecommendationService:
             except Exception:
                 pass
 
-        word_counts: Dict[str, int] = {}
+        word_counts: dict[str, int] = {}
         for title in titles:
             tokens = self._tokenize(title)
             for token in tokens:
@@ -192,12 +193,12 @@ class RecommendationService:
         sorted_words = sorted(word_counts.items(), key=lambda x: -x[1])
         return sorted_words[:30]
 
-    def _tokenize(self, text: str) -> List[str]:
+    def _tokenize(self, text: str) -> list[str]:
         text = text.lower()
         tokens = re.findall(r"[a-z0-9]+(?:[.+-][a-z0-9]+)*", text)
         return [t for t in tokens if len(t) > 2 and t not in STOP_WORDS]
 
-    def _generate_queries(self, keywords: List[str]) -> List[str]:
+    def _generate_queries(self, keywords: list[str]) -> list[str]:
         queries = []
         for i in range(0, len(keywords) - 1, 2):
             pair = f"{keywords[i]} {keywords[i + 1]}"
@@ -215,8 +216,8 @@ class RecommendationService:
     # Channel scoring
     # ------------------------------------------------------------------
 
-    def _score_channels(self, history_service, likes_service) -> List[str]:
-        channel_counts: Dict[str, int] = {}
+    def _score_channels(self, history_service, likes_service) -> list[str]:
+        channel_counts: dict[str, int] = {}
 
         if history_service:
             for entry in history_service.get_all():
@@ -237,7 +238,7 @@ class RecommendationService:
     # Search
     # ------------------------------------------------------------------
 
-    def _search_yt(self, query: str, max_results: int = 4) -> List[dict]:
+    def _search_yt(self, query: str, max_results: int = 4) -> list[dict]:
         try:
             return self._youtube_api.search_videos(query, max_results) or []
         except Exception as e:
@@ -259,15 +260,15 @@ class RecommendationService:
         with self._lock:
             self._cache[key] = (time.time(), list(data))
 
-    def invalidate_cache(self, key: Optional[str] = None):
+    def invalidate_cache(self, key: str | None = None):
         with self._lock:
             if key:
                 self._cache.pop(key, None)
             else:
                 self._cache.clear()
 
-    def _deduplicate(self, videos: List[dict]) -> List[dict]:
-        seen: Set[str] = set()
+    def _deduplicate(self, videos: list[dict]) -> list[dict]:
+        seen: set[str] = set()
         result = []
         for v in videos:
             vid = v.get("videoId", v.get("id", ""))
@@ -280,7 +281,7 @@ class RecommendationService:
     # Orchestrated load with events
     # ------------------------------------------------------------------
 
-    def load_section(self, section_name: str, **kwargs) -> List[dict]:
+    def load_section(self, section_name: str, **kwargs) -> list[dict]:
         if self._event_bus:
             self._event_bus.publish(RecommendationsLoadingEvent(section=section_name))
 

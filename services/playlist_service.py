@@ -1,33 +1,46 @@
 import logging
 import os
-import json
-import shutil
-import tempfile
+import re
 import threading
 import time
-from typing import List, Optional, Dict
+from typing import TYPE_CHECKING
 
-from core import EventBus
 from core.events import (
-    PlaylistCreatedEvent, PlaylistUpdatedEvent, PlaylistDeletedEvent,
+    PlaylistCreatedEvent,
+    PlaylistDeletedEvent,
+    PlaylistUpdatedEvent,
     WatchLaterToggledEvent,
 )
-from models import Playlist, PlaylistVideo
+from core.json_store import JsonStore
+from core.validation import coerce_id, coerce_text
+from models import Playlist
+from models.playlist import MAX_DESCRIPTION, MAX_PLAYLIST_NAME
+
+if TYPE_CHECKING:
+    from core import EventBus
 
 _logger = logging.getLogger(__name__)
 
 WATCH_LATER_ID = "watch-later"
+WATCH_LATER_NAME = "Watch Later"
+WATCH_LATER_DESCRIPTION = "Videos saved for later viewing"
+_SAFE_ID_RE = re.compile(r"^[A-Za-z0-9_-]{1,128}$")
 
 
 class PlaylistService:
-    """Manages playlists stored as individual JSON files in User/playlists/."""
+    """Manages playlists stored as individual JSON files in ``playlists/``.
 
-    def __init__(self, event_bus: Optional[EventBus] = None,
+    Mutations are transactional: a playlist is copied, the copy is written,
+    and memory is updated only after the write succeeds.  A failed write
+    therefore never leaves an in-memory playlist that does not exist on disk.
+    """
+
+    def __init__(self, event_bus: EventBus | None = None,
                  data_dir: str = "User"):
         self._event_bus = event_bus
         self._playlists_dir = os.path.join(data_dir, "playlists")
         self._lock = threading.RLock()
-        self._playlists: Dict[str, Playlist] = {}
+        self._playlists: dict[str, Playlist] = {}
 
         self._ensure_directory()
         self._load_all()
@@ -42,54 +55,107 @@ class PlaylistService:
 
     def _ensure_watch_later(self):
         with self._lock:
-            if WATCH_LATER_ID not in self._playlists:
-                playlist = Playlist(
-                    id=WATCH_LATER_ID,
-                    name="Watch Later",
-                    description="Videos saved for later viewing",
-                )
+            existing = self._playlists.get(WATCH_LATER_ID)
+            if existing is not None:
+                return
+            playlist = Playlist(
+                id=WATCH_LATER_ID,
+                name=WATCH_LATER_NAME,
+                description=WATCH_LATER_DESCRIPTION,
+            )
+            if self._save_playlist(playlist):
                 self._playlists[WATCH_LATER_ID] = playlist
-                self._save_playlist(playlist)
+
+    @staticmethod
+    def _unique_playlist_name(name: str, existing: set[str]) -> str:
+        candidate = name
+        index = 2
+        while candidate.casefold() in existing:
+            suffix = f" ({index})"
+            base = name[: max(1, MAX_PLAYLIST_NAME - len(suffix))].rstrip(" .")
+            candidate = f"{base}{suffix}"
+            index += 1
+        return candidate
 
     def _load_all(self):
-        self._playlists = {}
-        if not os.path.exists(self._playlists_dir):
+        loaded: dict[str, Playlist] = {}
+        used_names: set[str] = set()
+        try:
+            filenames = sorted(os.listdir(self._playlists_dir))
+        except OSError as exc:
+            _logger.error("Unable to scan playlists directory: %s", exc)
+            self._playlists = {}
             return
-        for filename in os.listdir(self._playlists_dir):
+
+        for filename in filenames:
             if not filename.endswith(".json"):
                 continue
-            filepath = os.path.join(self._playlists_dir, filename)
-            try:
-                with open(filepath, "r", encoding="utf-8") as f:
-                    data = json.load(f)
-                playlist = Playlist.from_dict(data)
-                self._playlists[playlist.id] = playlist
-            except (json.JSONDecodeError, IOError, KeyError):
+            playlist_id = filename[:-5]
+            if not _SAFE_ID_RE.match(playlist_id):
+                _logger.warning("Skipping playlist file with unsafe id: %s", filename)
+                continue
+            store = JsonStore(os.path.join(self._playlists_dir, filename))
+            data = store.load(default_factory=dict)
+            if not isinstance(data, dict) or not data:
+                _logger.warning("Skipping malformed playlist file: %s", filename)
                 continue
 
-    def _save_playlist(self, playlist: Playlist):
-        filepath = os.path.join(self._playlists_dir, f"{playlist.id}.json")
-        dir_path = os.path.dirname(filepath) or "."
-        tmp_path = None
-        try:
-            with tempfile.NamedTemporaryFile(
-                mode="w", dir=dir_path, delete=False, encoding="utf-8"
-            ) as tmp:
-                json.dump(playlist.to_dict(), tmp, indent=2, ensure_ascii=False)
-                tmp_path = tmp.name
-            shutil.move(tmp_path, filepath)
-        except (IOError, OSError) as e:
-            _logger.error("Failed to save playlist '%s': %s", playlist.name, e, exc_info=True)
-            if tmp_path and os.path.exists(tmp_path):
-                os.remove(tmp_path)
-            raise
+            playlist = Playlist.from_dict(data)
+            # The filename is the authoritative on-disk identity.
+            playlist.id = playlist_id
+            if playlist_id == WATCH_LATER_ID:
+                playlist.name = WATCH_LATER_NAME
+                playlist.description = WATCH_LATER_DESCRIPTION
 
-    def _delete_playlist_file(self, playlist_id: str):
-        filepath = os.path.join(self._playlists_dir, f"{playlist_id}.json")
-        if os.path.exists(filepath):
-            os.remove(filepath)
+            key = playlist.name.casefold()
+            if key in used_names:
+                unique = self._unique_playlist_name(playlist.name, used_names)
+                _logger.warning(
+                    "Duplicate playlist name '%s' in %s; renaming to '%s'",
+                    playlist.name,
+                    filename,
+                    unique,
+                )
+                playlist.name = unique
+                # Persist the repaired name so the next start is stable.
+                self._save_playlist(playlist)
+                key = unique.casefold()
+            used_names.add(key)
+            loaded[playlist_id] = playlist
+
+        self._playlists = loaded
+
+    def _playlist_path(self, playlist_id: str) -> str:
+        if not isinstance(playlist_id, str) or not _SAFE_ID_RE.match(playlist_id):
+            raise ValueError(f"Unsafe playlist id: {playlist_id!r}")
+        return os.path.join(self._playlists_dir, f"{playlist_id}.json")
+
+    def _save_playlist(self, playlist: Playlist) -> bool:
+        try:
+            JsonStore(self._playlist_path(playlist.id)).save(playlist.to_dict())
+        except (OSError, TypeError, ValueError) as exc:
+            _logger.error(
+                "Failed to save playlist '%s': %s",
+                getattr(playlist, "name", "?"),
+                exc,
+                exc_info=True,
+            )
+            return False
+        return True
+
+    def _delete_playlist_file(self, playlist_id: str) -> bool:
+        try:
+            JsonStore(self._playlist_path(playlist_id)).delete()
+        except ValueError:
+            _logger.warning("Refusing to delete playlist file for unsafe id: %r", playlist_id)
+            return False
+        except OSError as exc:
+            _logger.error("Failed to delete playlist file for %r: %s", playlist_id, exc)
+            return False
+        return True
 
     def shutdown(self):
+        # Playlist writes are synchronous and atomic.
         pass
 
     # ------------------------------------------------------------------
@@ -97,25 +163,45 @@ class PlaylistService:
     # ------------------------------------------------------------------
 
     def _name_exists(self, name: str, exclude_id: str = None) -> bool:
-        for pl in self._playlists.values():
-            if pl.name == name and pl.id != exclude_id:
-                return True
-        return False
+        return any(
+            pl.name.casefold() == name.casefold() and pl.id != exclude_id
+            for pl in self._playlists.values()
+        )
 
-    def _get_video_id(self, video_data: Dict) -> str:
+    @staticmethod
+    def _clean_name(name: object) -> str:
+        return coerce_text(name, "", max_length=MAX_PLAYLIST_NAME)
+
+    @staticmethod
+    def _clean_description(description: object) -> str:
+        return coerce_text(
+            description, "", max_length=MAX_DESCRIPTION, multiline=True
+        )
+
+    def _get_video_id(self, video_data: dict) -> str:
         return str(video_data.get("videoId", video_data.get("video_id", video_data.get("id", ""))))
+
+    def _copy_playlist(self, playlist: Playlist) -> Playlist:
+        return Playlist.from_dict(playlist.to_dict())
 
     # ------------------------------------------------------------------
     # Playlist CRUD
     # ------------------------------------------------------------------
 
-    def create_playlist(self, name: str, description: str = "") -> Optional[Playlist]:
+    def create_playlist(self, name: str, description: str = "") -> Playlist | None:
+        name = self._clean_name(name)
+        if not name:
+            return None
         with self._lock:
             if self._name_exists(name):
                 return None
-            playlist = Playlist(name=name, description=description)
+            playlist = Playlist(
+                name=name,
+                description=self._clean_description(description),
+            )
+            if not self._save_playlist(playlist):
+                return None
             self._playlists[playlist.id] = playlist
-            self._save_playlist(playlist)
 
         if self._event_bus:
             self._event_bus.publish(PlaylistCreatedEvent(
@@ -124,15 +210,19 @@ class PlaylistService:
         return playlist
 
     def rename_playlist(self, playlist_id: str, new_name: str) -> bool:
-        if playlist_id == WATCH_LATER_ID:
+        new_name = self._clean_name(new_name)
+        if playlist_id == WATCH_LATER_ID or not new_name:
             return False
         with self._lock:
             playlist = self._playlists.get(playlist_id)
             if not playlist or self._name_exists(new_name, exclude_id=playlist_id):
                 return False
-            playlist.name = new_name
-            playlist.updated_at = time.time()
-            self._save_playlist(playlist)
+            candidate = self._copy_playlist(playlist)
+            candidate.name = new_name
+            candidate.updated_at = time.time()
+            if not self._save_playlist(candidate):
+                return False
+            self._playlists[playlist_id] = candidate
 
         if self._event_bus:
             self._event_bus.publish(PlaylistUpdatedEvent(
@@ -144,10 +234,12 @@ class PlaylistService:
         if playlist_id == WATCH_LATER_ID:
             return False
         with self._lock:
-            playlist = self._playlists.pop(playlist_id, None)
+            playlist = self._playlists.get(playlist_id)
             if not playlist:
                 return False
-            self._delete_playlist_file(playlist_id)
+            if not self._delete_playlist_file(playlist_id):
+                return False
+            self._playlists.pop(playlist_id, None)
 
         if self._event_bus:
             self._event_bus.publish(PlaylistDeletedEvent(
@@ -155,30 +247,40 @@ class PlaylistService:
             ))
         return True
 
-    def get_playlist(self, playlist_id: str) -> Optional[Playlist]:
+    def get_playlist(self, playlist_id: str) -> Playlist | None:
         with self._lock:
             pl = self._playlists.get(playlist_id)
             if pl:
-                return Playlist.from_dict(pl.to_dict())
+                return self._copy_playlist(pl)
             return None
 
-    def get_all_playlists(self) -> List[Playlist]:
+    def get_all_playlists(self) -> list[Playlist]:
         with self._lock:
-            return [Playlist.from_dict(pl.to_dict()) for pl in self._playlists.values()]
+            return [self._copy_playlist(pl) for pl in self._playlists.values()]
 
     # ------------------------------------------------------------------
     # Video operations
     # ------------------------------------------------------------------
 
-    def add_video(self, playlist_id: str, video_data: Dict) -> bool:
-        video_id = self._get_video_id(video_data)
+    def add_video(self, playlist_id: str, video_data: dict) -> bool:
+        if not isinstance(video_data, dict):
+            return False
+        video_id = coerce_id(self._get_video_id(video_data), max_length=128)
+        if not video_id:
+            _logger.debug("Ignoring playlist video without a safe id")
+            return False
         with self._lock:
             playlist = self._playlists.get(playlist_id)
             if not playlist or playlist.has_video(video_id):
                 return False
-            playlist.add_video(video_data)
-            playlist.updated_at = time.time()
-            self._save_playlist(playlist)
+            candidate = self._copy_playlist(playlist)
+            safe_video_data = dict(video_data)
+            safe_video_data["video_id"] = video_id
+            candidate.add_video(safe_video_data)
+            candidate.updated_at = time.time()
+            if not self._save_playlist(candidate):
+                return False
+            self._playlists[playlist_id] = candidate
 
         if self._event_bus:
             self._event_bus.publish(PlaylistUpdatedEvent(
@@ -191,16 +293,20 @@ class PlaylistService:
             playlist = self._playlists.get(playlist_id)
             if not playlist:
                 return False
-            removed = playlist.remove_video(video_id)
-            if removed:
-                playlist.updated_at = time.time()
-                self._save_playlist(playlist)
+            candidate = self._copy_playlist(playlist)
+            removed = candidate.remove_video(video_id)
+            if not removed:
+                return False
+            candidate.updated_at = time.time()
+            if not self._save_playlist(candidate):
+                return False
+            self._playlists[playlist_id] = candidate
 
-        if removed and self._event_bus:
+        if self._event_bus:
             self._event_bus.publish(PlaylistUpdatedEvent(
                 playlist_id=playlist_id, action="video_removed"
             ))
-        return removed
+        return True
 
     def has_video(self, playlist_id: str, video_id: str) -> bool:
         with self._lock:
@@ -209,7 +315,7 @@ class PlaylistService:
                 return False
             return playlist.has_video(video_id)
 
-    def get_videos(self, playlist_id: str) -> List[Dict]:
+    def get_videos(self, playlist_id: str) -> list[dict]:
         with self._lock:
             playlist = self._playlists.get(playlist_id)
             if not playlist:
@@ -220,23 +326,23 @@ class PlaylistService:
     # Watch Later convenience
     # ------------------------------------------------------------------
 
-    def toggle_watch_later(self, video_data: Dict) -> bool:
+    def toggle_watch_later(self, video_data: dict) -> bool:
         video_id = self._get_video_id(video_data)
         if self.is_in_watch_later(video_id):
-            self.remove_from_watch_later(video_id)
-            if self._event_bus:
+            removed = self.remove_from_watch_later(video_id)
+            if removed and self._event_bus:
                 self._event_bus.publish(
                     WatchLaterToggledEvent(video_id=video_id, is_watch_later=False)
                 )
             return False
-        self.add_to_watch_later(video_data)
-        if self._event_bus:
+        added = self.add_to_watch_later(video_data)
+        if added and self._event_bus:
             self._event_bus.publish(
                 WatchLaterToggledEvent(video_id=video_id, is_watch_later=True)
             )
-        return True
+        return added
 
-    def add_to_watch_later(self, video_data: Dict) -> bool:
+    def add_to_watch_later(self, video_data: dict) -> bool:
         return self.add_video(WATCH_LATER_ID, video_data)
 
     def remove_from_watch_later(self, video_id: str) -> bool:
@@ -245,7 +351,7 @@ class PlaylistService:
     def is_in_watch_later(self, video_id: str) -> bool:
         return self.has_video(WATCH_LATER_ID, video_id)
 
-    def get_watch_later(self) -> List[Dict]:
+    def get_watch_later(self) -> list[dict]:
         return self.get_videos(WATCH_LATER_ID)
 
     # ------------------------------------------------------------------
@@ -256,38 +362,60 @@ class PlaylistService:
         with self._lock:
             return len(self._playlists)
 
-    def export_all(self) -> Dict[str, List]:
+    def export_all(self) -> dict[str, dict]:
         with self._lock:
             return {
                 pid: pl.to_dict()
                 for pid, pl in self._playlists.items()
             }
 
-    def import_all(self, data: Dict[str, Dict]):
+    def import_all(self, data: dict[str, dict]) -> int:
+        if not isinstance(data, dict):
+            return 0
+        imported = 0
         with self._lock:
+            used_names = {pl.name.casefold() for pl in self._playlists.values()}
             for pid, pl_data in data.items():
+                if not isinstance(pid, str) or not _SAFE_ID_RE.match(pid):
+                    _logger.warning("Skipping import of unsafe playlist id: %r", pid)
+                    continue
+                if not isinstance(pl_data, dict):
+                    _logger.warning("Skipping import of malformed playlist %r", pid)
+                    continue
                 playlist = Playlist.from_dict(pl_data)
+                playlist.id = pid
+                if pid == WATCH_LATER_ID:
+                    playlist.name = WATCH_LATER_NAME
+                    playlist.description = WATCH_LATER_DESCRIPTION
+                elif playlist.name.casefold() in used_names:
+                    playlist.name = self._unique_playlist_name(
+                        playlist.name, used_names
+                    )
+                if not self._save_playlist(playlist):
+                    continue
                 self._playlists[pid] = playlist
-                self._save_playlist(playlist)
+                used_names.add(playlist.name.casefold())
+                imported += 1
+        return imported
 
     def reload(self, data_dir: str):
         with self._lock:
             self._playlists_dir = os.path.join(data_dir, "playlists")
             self._ensure_directory()
-            self._playlists.clear()
-        self._load_all()
-        self._ensure_watch_later()
+            self._load_all()
+            self._ensure_watch_later()
 
-    def reset(self):
+    def reset(self) -> bool:
         with self._lock:
             keep = {WATCH_LATER_ID}
-            to_delete = [pid for pid in self._playlists if pid not in keep]
-            for pid in to_delete:
-                pl = self._playlists.pop(pid, None)
-                if pl:
-                    self._delete_playlist_file(pid)
+            for pid in [pid for pid in self._playlists if pid not in keep]:
+                if self._delete_playlist_file(pid):
+                    self._playlists.pop(pid, None)
             wl = self._playlists.get(WATCH_LATER_ID)
-            if wl:
-                wl.videos.clear()
-                wl.updated_at = time.time()
-                self._save_playlist(wl)
+            if wl is not None:
+                candidate = self._copy_playlist(wl)
+                candidate.videos.clear()
+                candidate.updated_at = time.time()
+                if self._save_playlist(candidate):
+                    self._playlists[WATCH_LATER_ID] = candidate
+        return True

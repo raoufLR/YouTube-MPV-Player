@@ -1,23 +1,32 @@
+import contextlib
 import threading
 
+from PyQt6.QtCore import Qt, QTimer, pyqtSignal
 from PyQt6.QtWidgets import (
-    QWidget, QVBoxLayout, QScrollArea, QLabel, QPushButton,
-    QGridLayout, QSizePolicy,
+    QGridLayout,
+    QLabel,
+    QScrollArea,
+    QVBoxLayout,
+    QWidget,
 )
-from collections import OrderedDict
-from PyQt6.QtCore import Qt, pyqtSignal, QTimer, QSize
-from PyQt6.QtGui import QPixmap
 
 from core.events import (
-    EVENT_THUMBNAIL_LOADED, EVENT_LIKE_CHANGED, LikeChangedEvent,
-    EVENT_STREAM_RESOLVING, EVENT_STREAM_RESOLVED,
-    EVENT_VIDEO_STARTED, EVENT_PLAYBACK_ERROR,
-    EVENT_WATCH_LATER_TOGGLED, WatchLaterToggledEvent,
+    EVENT_LIKE_CHANGED,
+    EVENT_PLAYBACK_ERROR,
+    EVENT_STREAM_RESOLVED,
+    EVENT_STREAM_RESOLVING,
+    EVENT_THUMBNAIL_LOADED,
+    EVENT_VIDEO_STARTED,
+    EVENT_WATCH_LATER_TOGGLED,
+    LikeChangedEvent,
     SearchCancelledEvent,
+    WatchLaterToggledEvent,
 )
+from ui.components import SkeletonWidget, VideoCard
+from ui.components.video_card import extract_video_id
 from ui.event_dispatcher import QtEventDispatcher
-from ui.components import VideoCard, SkeletonWidget
-from ui import icons
+from ui.i18n import tr
+from ui.thumbnail_pixmaps import cached_pixmap, pixmap_loader, request_pixmap
 
 LOADING_TEXT = "Loading more results..."
 
@@ -26,6 +35,7 @@ class SearchPage(QWidget):
     play_video_requested = pyqtSignal(str, str, object)
     like_toggled = pyqtSignal(object)
     watch_later_toggled = pyqtSignal(object)
+    search_finished = pyqtSignal(bool, str)
     _search_results_ready = pyqtSignal(object, object)
     _search_failed = pyqtSignal(object, object)
     _thumbnail_ready = pyqtSignal(object, object)
@@ -33,14 +43,16 @@ class SearchPage(QWidget):
     PAGE_SIZE = 30
     SCROLL_THRESHOLD = 300
     MAX_PAGES = 10
-    MAX_PIXMAP_CACHE = 50
     CARDS_PER_ROW = 3
 
-    def __init__(self, search_service, thumbnail_service, event_bus, parent=None):
+    def __init__(self, search_service, thumbnail_service, event_bus,
+                 likes_service=None, playlist_service=None, parent=None):
         super().__init__(parent)
         self._search_service = search_service
         self._thumbnail_service = thumbnail_service
         self._event_bus = event_bus
+        self._likes_service = likes_service
+        self._playlist_service = playlist_service
 
         self._current_query = ""
         self._current_page = 0
@@ -55,13 +67,13 @@ class SearchPage(QWidget):
         self._resolving_ids = set()
         self._playing_id = ""
 
-        self._pixmap_cache = OrderedDict()
         self._card_by_id = {}
         self._skeletons = []
         self._subscriptions = []
 
         self._setup_ui()
         self._connect_signals()
+        self._show_empty_message(tr("Search for videos to get started"))
 
     def _setup_ui(self):
         layout = QVBoxLayout()
@@ -89,14 +101,14 @@ class SearchPage(QWidget):
         self._load_more_layout.setContentsMargins(0, 12, 0, 12)
         self._load_more_layout.setAlignment(Qt.AlignmentFlag.AlignCenter)
 
-        self._load_more_label = QLabel(LOADING_TEXT)
-        self._load_more_label.setStyleSheet("color: #888888; font-size: 13px;")
+        self._load_more_label = QLabel(tr(LOADING_TEXT))
+        self._load_more_label.setObjectName("loadMoreLabel")
         self._load_more_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self._load_more_label.setVisible(False)
         self._load_more_layout.addWidget(self._load_more_label)
         self._scroll_layout.addWidget(self._load_more_container)
 
-        self._empty_label = QLabel("Search for videos to get started")
+        self._empty_label = QLabel(tr("Search for videos to get started"))
         self._empty_label.setObjectName("emptyState")
         self._empty_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self._empty_label.setVisible(False)
@@ -131,20 +143,24 @@ class SearchPage(QWidget):
         self._thumbnail_ready.connect(self._apply_thumbnail_bytes)
         self._subscriptions = [
             (EVENT_THUMBNAIL_LOADED, QtEventDispatcher(self._on_thumbnail_loaded_event)),
-            (EVENT_LIKE_CHANGED, self._on_like_changed),
-            (EVENT_WATCH_LATER_TOGGLED, self._on_watch_later_toggled),
+            (EVENT_LIKE_CHANGED, QtEventDispatcher(self._on_like_changed)),
+            (EVENT_WATCH_LATER_TOGGLED, QtEventDispatcher(self._on_watch_later_toggled)),
             (EVENT_STREAM_RESOLVING, QtEventDispatcher(self._on_stream_resolving)),
             (EVENT_STREAM_RESOLVED, QtEventDispatcher(self._on_stream_resolved)),
-            (EVENT_VIDEO_STARTED, self._on_video_started),
+            (EVENT_VIDEO_STARTED, QtEventDispatcher(self._on_video_started)),
             (EVENT_PLAYBACK_ERROR, QtEventDispatcher(self._on_playback_error)),
         ]
         for event_type, cb in self._subscriptions:
             self._event_bus.subscribe(event_type, cb, weak=False)
 
+        pixmap_loader().pixmap_ready.connect(self._on_pixmap_ready)
+
     def cleanup(self):
         for event_type, cb in getattr(self, '_subscriptions', []):
             self._event_bus.unsubscribe(event_type, cb)
         self._subscriptions = []
+        with contextlib.suppress(TypeError, RuntimeError):
+            pixmap_loader().pixmap_ready.disconnect(self._on_pixmap_ready)
 
     # ------------------------------------------------------------------
     # Search
@@ -185,11 +201,13 @@ class SearchPage(QWidget):
                 self._grid.removeWidget(w)
                 w.deleteLater()
         self._card_by_id.clear()
-        self._pixmap_cache.clear()
         self._skeletons.clear()
+        self._playing_id = ""
+        self._resolving_ids.clear()
 
     def _show_skeletons(self, count: int):
         for s in self._skeletons:
+            self._grid.removeWidget(s)
             s.stop()
             s.deleteLater()
         self._skeletons.clear()
@@ -204,6 +222,7 @@ class SearchPage(QWidget):
 
     def _hide_skeletons(self):
         for s in self._skeletons:
+            self._grid.removeWidget(s)
             s.stop()
             s.deleteLater()
         self._skeletons.clear()
@@ -243,21 +262,30 @@ class SearchPage(QWidget):
         self._is_loading = False
         self._has_more = has_more
         self._load_more_label.setVisible(False)
+        first_page = self._current_page == 0
 
         if not videos:
             if not self._card_by_id:
-                self._empty_label.setVisible(True)
+                self._show_empty_message(
+                    tr("No results for \u201c{query}\u201d").format(
+                        query=self._current_query
+                    )
+                    if self._current_query
+                    else tr("Search for videos to get started")
+                )
+            if first_page:
+                self.search_finished.emit(True, "")
             return
 
+        self._empty_label.setVisible(False)
         self._update_grid_columns()
         cols = self.CARDS_PER_ROW
-        existing_count = self._grid.count()
-        start_row = existing_count // cols
-        col = existing_count % cols
+        start_row = len(self._card_by_id) // cols
+        col = len(self._card_by_id) % cols
 
         self._grid_widget.setUpdatesEnabled(False)
         for vid in videos:
-            video_id = vid.get("videoId", "")
+            video_id = extract_video_id(vid)
             card = VideoCard(vid)
             card.play_requested.connect(self._on_card_play)
             card.like_toggled.connect(self._on_card_like)
@@ -268,6 +296,7 @@ class SearchPage(QWidget):
 
             self._apply_initial_like_state(video_id, card)
             self._apply_initial_wl_state(video_id, card)
+            self._apply_playback_state(video_id, card)
 
             thumb_url = vid.get("thumbnail", "")
             if thumb_url:
@@ -284,6 +313,8 @@ class SearchPage(QWidget):
 
         self._current_page += 1
         QTimer.singleShot(0, self._check_auto_load)
+        if first_page:
+            self.search_finished.emit(True, "")
 
     def _on_error(self, error, request_id):
         if request_id != self._current_request_id:
@@ -291,6 +322,16 @@ class SearchPage(QWidget):
         self._hide_skeletons()
         self._is_loading = False
         self._load_more_label.setVisible(False)
+        message = str(error or tr("Search failed"))
+        if not self._card_by_id:
+            self._show_empty_message(
+                tr("Search failed: {message}").format(message=message)
+            )
+        self.search_finished.emit(False, message)
+
+    def _show_empty_message(self, text: str):
+        self._empty_label.setText(text)
+        self._empty_label.setVisible(True)
 
     # ------------------------------------------------------------------
     # Video card signal handlers
@@ -352,37 +393,56 @@ class SearchPage(QWidget):
                 return
 
     def _apply_thumbnail_bytes(self, payload, card):
-        if isinstance(payload, tuple):
-            data, url = payload
-        else:
-            data, url = payload, None
-        if url and url in self._pixmap_cache:
-            self._pixmap_cache.move_to_end(url)
-            card.set_thumbnail(self._pixmap_cache[url])
+        data, url = payload
+        # Cached frames apply inline; a cold decode completes on the worker
+        # pool and reaches the card through ``_on_pixmap_ready``.
+        pixmap = request_pixmap(
+            url, data, card.THUMBNAIL_WIDTH, card.THUMBNAIL_HEIGHT
+        )
+        if pixmap is not None:
+            card.set_thumbnail(pixmap)
+
+    def _on_pixmap_ready(self, url: str, width: int, height: int):
+        pixmap = cached_pixmap(url, width, height)
+        if pixmap is None:
             return
-        pixmap = QPixmap()
-        pixmap.loadFromData(data)
-        if url:
-            scaled = pixmap.scaled(
-                card.THUMBNAIL_WIDTH, card.THUMBNAIL_HEIGHT,
-                Qt.AspectRatioMode.KeepAspectRatioByExpanding,
-                Qt.TransformationMode.SmoothTransformation
-            )
-            if len(self._pixmap_cache) >= self.MAX_PIXMAP_CACHE:
-                self._pixmap_cache.popitem(last=False)
-            self._pixmap_cache[url] = scaled
-        card.set_thumbnail(pixmap)
+        for card in self._card_by_id.values():
+            if card._thumbnail_url == url:
+                card.set_thumbnail(pixmap)
 
     # ------------------------------------------------------------------
     # Like / Watch Later initial state
     # ------------------------------------------------------------------
 
     def _apply_initial_like_state(self, video_id: str, card: VideoCard):
-        liked = self._like_cache.get(video_id, False)
-        card.set_liked(liked)
+        if not video_id:
+            return
+        if video_id not in self._like_cache and self._likes_service is not None:
+            try:
+                self._like_cache[video_id] = bool(
+                    self._likes_service.is_liked(video_id)
+                )
+            except Exception:
+                self._like_cache[video_id] = False
+        card.set_liked(self._like_cache.get(video_id, False))
 
     def _apply_initial_wl_state(self, video_id: str, card: VideoCard):
-        pass
+        if not video_id:
+            return
+        if video_id not in self._wl_cache and self._playlist_service is not None:
+            try:
+                self._wl_cache[video_id] = bool(
+                    self._playlist_service.is_in_watch_later(video_id)
+                )
+            except Exception:
+                self._wl_cache[video_id] = False
+        card.set_watch_later(self._wl_cache.get(video_id, False))
+
+    def _apply_playback_state(self, video_id: str, card: VideoCard):
+        card.set_playback_state(
+            resolving=video_id in self._resolving_ids,
+            playing=bool(video_id) and video_id == self._playing_id,
+        )
 
     # ------------------------------------------------------------------
     # EventBus subscribers
@@ -396,18 +456,37 @@ class SearchPage(QWidget):
 
     def _on_watch_later_toggled(self, event: WatchLaterToggledEvent):
         self._wl_cache[event.video_id] = event.is_watch_later
+        card = self._card_by_id.get(event.video_id)
+        if card:
+            card.set_watch_later(event.is_watch_later)
 
     def _on_stream_resolving(self, event):
         self._resolving_ids.add(event.video_id)
+        card = self._card_by_id.get(event.video_id)
+        if card:
+            self._apply_playback_state(event.video_id, card)
 
     def _on_stream_resolved(self, event):
         self._resolving_ids.discard(event.video_id)
+        card = self._card_by_id.get(event.video_id)
+        if card:
+            self._apply_playback_state(event.video_id, card)
 
     def _on_video_started(self, event):
-        pass
+        previous = self._playing_id
+        self._playing_id = event.video_id
+        for video_id in {previous, self._playing_id}:
+            card = self._card_by_id.get(video_id)
+            if card:
+                self._apply_playback_state(video_id, card)
 
     def _on_playback_error(self, event):
-        pass
+        self._resolving_ids.discard(event.video_id)
+        if self._playing_id == event.video_id:
+            self._playing_id = ""
+        card = self._card_by_id.get(event.video_id)
+        if card:
+            self._apply_playback_state(event.video_id, card)
 
     # ------------------------------------------------------------------
     # Clear
@@ -427,5 +506,5 @@ class SearchPage(QWidget):
         self._wl_cache.clear()
         self._playing_id = ""
         self._clear_cards()
-        self._empty_label.setVisible(False)
+        self._show_empty_message(tr("Search for videos to get started"))
         self._load_more_label.setVisible(False)

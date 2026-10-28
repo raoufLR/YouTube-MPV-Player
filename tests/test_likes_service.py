@@ -1,4 +1,3 @@
-import pytest
 
 from core.events import LikeChangedEvent
 

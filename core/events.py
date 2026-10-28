@@ -12,7 +12,7 @@ than direct method calls.
 
 import time
 from dataclasses import dataclass, field
-from typing import Any, Optional
+from typing import Any
 
 
 @dataclass
@@ -70,6 +70,14 @@ class StreamResolvedEvent(ApplicationEvent):
 
 
 @dataclass
+class StreamResolveFailedEvent(ApplicationEvent):
+    event_type: str = "stream_resolve_failed"
+    video_id: str = ""
+    quality: str = ""
+    error: str = ""
+
+
+@dataclass
 class SearchCancelledEvent(ApplicationEvent):
     event_type: str = "search_cancelled"
     query: str = ""
@@ -104,17 +112,24 @@ class VideoStartedEvent(ApplicationEvent):
 @dataclass
 class VideoPausedEvent(ApplicationEvent):
     event_type: str = "video_paused"
+    is_paused: bool = True
 
 
 @dataclass
 class VideoStoppedEvent(ApplicationEvent):
     event_type: str = "video_stopped"
+    reason: str = "stopped"
+    video_id: str = ""
+    position: float = 0.0
+    duration: float = 0.0
 
 
 @dataclass
 class PlaybackErrorEvent(ApplicationEvent):
     event_type: str = "playback_error"
     error: str = ""
+    video_id: str = ""
+    stage: str = "playback"
 
 
 @dataclass
@@ -206,11 +221,44 @@ class RecommendationsFailedEvent(ApplicationEvent):
     error: str = ""
 
 
+@dataclass
+class UpdateAvailableEvent(ApplicationEvent):
+    event_type: str = "update_available"
+    backend: str = "yt-dlp"
+    current_version: str = ""
+    latest_version: str = ""
+
+
+@dataclass
+class UpdateCompletedEvent(ApplicationEvent):
+    event_type: str = "update_completed"
+    backend: str = "yt-dlp"
+    version: str = ""
+
+
+@dataclass
+class UpdateUpToDateEvent(ApplicationEvent):
+    event_type: str = "update_up_to_date"
+    backend: str = "yt-dlp"
+    version: str = ""
+
+
+@dataclass
+class UpdateFailedEvent(ApplicationEvent):
+    event_type: str = "update_failed"
+    backend: str = "yt-dlp"
+    stage: str = "check"
+    error: str = ""
+
+
 # Event type constants for direct reference
 EVENT_STREAM_RESOLVING = "stream_resolving"
 EVENT_STREAM_RESOLVED = "stream_resolved"
+EVENT_STREAM_RESOLVE_FAILED = "stream_resolve_failed"
 EVENT_THUMBNAIL_LOADED = "thumbnail_loaded"
 EVENT_VIDEO_STARTED = "video_started"
+EVENT_VIDEO_PAUSED = "video_paused"
+EVENT_VIDEO_STOPPED = "video_stopped"
 EVENT_PLAYBACK_ERROR = "playback_error"
 EVENT_HISTORY_UPDATED = "history_updated"
 EVENT_LIKE_CHANGED = "like_changed"
@@ -226,3 +274,7 @@ EVENT_PROFILE_DELETED = "profile_deleted"
 EVENT_RECOMMENDATIONS_LOADING = "recommendations_loading"
 EVENT_RECOMMENDATIONS_LOADED = "recommendations_loaded"
 EVENT_RECOMMENDATIONS_FAILED = "recommendations_failed"
+EVENT_UPDATE_AVAILABLE = "update_available"
+EVENT_UPDATE_COMPLETED = "update_completed"
+EVENT_UPDATE_UP_TO_DATE = "update_up_to_date"
+EVENT_UPDATE_FAILED = "update_failed"

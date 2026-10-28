@@ -9,9 +9,9 @@ Models are designed for single-user with future multi-user support
 via a user_id field on UserProfile.
 """
 
-from .user_profile import UserProfile
 from .playlist import Playlist, PlaylistVideo
-from .user_settings import UserSettings
 from .profile import Profile
+from .user_profile import UserProfile
+from .user_settings import UserSettings
 
 __all__ = ['UserProfile', 'Playlist', 'PlaylistVideo', 'UserSettings', 'Profile']

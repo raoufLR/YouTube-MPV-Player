@@ -1,9 +1,22 @@
-from PyQt6.QtGui import QIcon, QPixmap, QPainter
-from PyQt6.QtCore import Qt, QSize, QByteArray
+from functools import lru_cache
+
+from PyQt6.QtCore import QByteArray, Qt
+from PyQt6.QtGui import QIcon, QPainter, QPixmap
 from PyQt6.QtSvg import QSvgRenderer
 
 
+@lru_cache(maxsize=128)
 def _icon(svg: str, size: int = 24) -> QIcon:
+    """Render *svg* at *size* and cache the result.
+
+    Every :class:`VideoCard` requests four icons and the home page builds up
+    to seventy cards, so without caching the same handful of SVGs is parsed
+    and rasterised hundreds of times per page load.  ``QIcon`` is immutable
+    from the caller's point of view (``setIcon`` keeps a reference, it never
+    mutates the icon), which makes sharing one instance safe.
+
+    Icons must be requested from the GUI thread: they own a ``QPixmap``.
+    """
     renderer = QSvgRenderer(QByteArray(svg.encode("utf-8")))
     pixmap = QPixmap(size, size)
     pixmap.fill(Qt.GlobalColor.transparent)
@@ -11,6 +24,11 @@ def _icon(svg: str, size: int = 24) -> QIcon:
     renderer.render(painter)
     painter.end()
     return QIcon(pixmap)
+
+
+def clear_cache():
+    """Drop cached icons (used by tests that recreate the QApplication)."""
+    _icon.cache_clear()
 
 
 def home(size: int = 24) -> QIcon:
@@ -93,6 +111,38 @@ def play(size: int = 24) -> QIcon:
     """, size)
 
 
+def pause(size: int = 24) -> QIcon:
+    return _icon("""
+    <svg viewBox="0 0 24 24" fill="currentColor">
+      <path d="M6 5h4v14H6zM14 5h4v14h-4z"/>
+    </svg>
+    """, size)
+
+
+def stop(size: int = 24) -> QIcon:
+    return _icon("""
+    <svg viewBox="0 0 24 24" fill="currentColor">
+      <path d="M6 6h12v12H6z"/>
+    </svg>
+    """, size)
+
+
+def volume(size: int = 24) -> QIcon:
+    return _icon("""
+    <svg viewBox="0 0 24 24" fill="currentColor">
+      <path d="M3 9v6h4l5 5V4L7 9H3zm13.5 3a4.5 4.5 0 0 0-2.5-4v8a4.5 4.5 0 0 0 2.5-4z"/>
+    </svg>
+    """, size)
+
+
+def mute(size: int = 24) -> QIcon:
+    return _icon("""
+    <svg viewBox="0 0 24 24" fill="currentColor">
+      <path d="M3 9v6h4l5 5V4L7 9H3zm18.4 3 2.1-2.1-1.4-1.4-2.1 2.1-2.1-2.1-1.4 1.4 2.1 2.1-2.1 2.1 1.4 1.4 2.1-2.1 2.1 2.1 1.4-1.4z"/>
+    </svg>
+    """, size)
+
+
 def like(size: int = 24) -> QIcon:
     return _icon("""
     <svg viewBox="0 0 24 24" fill="currentColor">
@@ -169,5 +219,37 @@ def more_vert(size: int = 24) -> QIcon:
     return _icon("""
     <svg viewBox="0 0 24 24" fill="currentColor">
       <path d="M12 8c1.1 0 2-.9 2-2s-.9-2-2-2-2 .9-2 2 .9 2 2 2zm0 2c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2zm0 6c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2z"/>
+    </svg>
+    """, size)
+
+
+def refresh(size: int = 24) -> QIcon:
+    return _icon("""
+    <svg viewBox="0 0 24 24" fill="currentColor">
+      <path d="M17.65 6.35A7.95 7.95 0 0 0 12 4a8 8 0 1 0 7.73 10h-2.08A6 6 0 1 1 12 6c1.66 0 3.14.69 4.22 1.78L13 11h7V4l-2.35 2.35z"/>
+    </svg>
+    """, size)
+
+
+def fullscreen(size: int = 24) -> QIcon:
+    return _icon("""
+    <svg viewBox="0 0 24 24" fill="currentColor">
+      <path d="M7 14H5v5h5v-2H7v-3zm-2-4h2V7h3V5H5v5zm12 7h-3v2h5v-5h-2v3zM14 5v2h3v3h2V5h-5z"/>
+    </svg>
+    """, size)
+
+
+def fullscreen_exit(size: int = 24) -> QIcon:
+    return _icon("""
+    <svg viewBox="0 0 24 24" fill="currentColor">
+      <path d="M5 16h3v3h2v-5H5v2zm3-8H5v2h5V5H8v3zm6 11h2v-3h3v-2h-5v5zm2-14v3h3v2h-5V5h2z"/>
+    </svg>
+    """, size)
+
+
+def expand(size: int = 24) -> QIcon:
+    return _icon("""
+    <svg viewBox="0 0 24 24" fill="currentColor">
+      <path d="M19 19H5V5h7V3H5c-1.11 0-2 .9-2 2v14c0 1.1.89 2 2 2h14c1.1 0 2-.9 2-2v-7h-2v7zM14 3v2h3.59l-9.83 9.83 1.41 1.41L19 6.41V10h2V3h-7z"/>
     </svg>
     """, size)

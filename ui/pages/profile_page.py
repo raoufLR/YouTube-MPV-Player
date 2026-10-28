@@ -1,12 +1,17 @@
+from PyQt6.QtCore import Qt
 from PyQt6.QtWidgets import (
-    QWidget, QVBoxLayout, QHBoxLayout, QLabel, QPushButton,
-    QGridLayout, QScrollArea, QFileDialog,
+    QFileDialog,
+    QGridLayout,
+    QHBoxLayout,
+    QLabel,
+    QPushButton,
+    QScrollArea,
+    QVBoxLayout,
+    QWidget,
 )
-from PyQt6.QtCore import Qt, QSize
-from PyQt6.QtGui import QFont
 
 from ui.avatar_widget import AvatarWidget
-from ui import icons
+from ui.i18n import tr
 
 
 class StatCard(QWidget):
@@ -23,10 +28,10 @@ class StatCard(QWidget):
         v.setAlignment(Qt.AlignmentFlag.AlignCenter)
         layout.addWidget(v)
 
-        l = QLabel(label)
-        l.setObjectName("statLabel")
-        l.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        layout.addWidget(l)
+        label_widget = QLabel(label)
+        label_widget.setObjectName("statLabel")
+        label_widget.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        layout.addWidget(label_widget)
 
         self.setLayout(layout)
 
@@ -66,11 +71,11 @@ class ProfilePage(QWidget):
         info_layout = QVBoxLayout()
         info_layout.setSpacing(4)
 
-        self._name_label = QLabel("Profile")
-        self._name_label.setStyleSheet("font-size: 22px; font-weight: 700; color: #FFFFFF;")
+        self._name_label = QLabel(tr("Profile"))
+        self._name_label.setObjectName("profileName")
         info_layout.addWidget(self._name_label)
 
-        self._change_avatar_btn = QPushButton("Change Avatar")
+        self._change_avatar_btn = QPushButton(tr("Change Avatar"))
         self._change_avatar_btn.setObjectName("iconButton")
         self._change_avatar_btn.setFixedHeight(36)
         self._change_avatar_btn.clicked.connect(self._on_change_avatar)
@@ -83,16 +88,16 @@ class ProfilePage(QWidget):
         stats_grid = QGridLayout()
         stats_grid.setSpacing(12)
 
-        self._watched_card = StatCard("0", "Videos Watched")
+        self._watched_card = StatCard("0", tr("Videos Watched"))
         stats_grid.addWidget(self._watched_card, 0, 0)
 
-        self._likes_card = StatCard("0", "Liked Videos")
+        self._likes_card = StatCard("0", tr("Liked Videos"))
         stats_grid.addWidget(self._likes_card, 0, 1)
 
-        self._playlists_card = StatCard("0", "Playlists")
+        self._playlists_card = StatCard("0", tr("Playlists"))
         stats_grid.addWidget(self._playlists_card, 0, 2)
 
-        self._wl_card = StatCard("0", "Watch Later")
+        self._wl_card = StatCard("0", tr("Watch Later"))
         stats_grid.addWidget(self._wl_card, 0, 3)
 
         content_layout.addLayout(stats_grid)
@@ -123,7 +128,7 @@ class ProfilePage(QWidget):
 
     def _on_change_avatar(self):
         path, _ = QFileDialog.getOpenFileName(
-            self, "Choose Avatar", "", "Images (*.png *.jpg *.jpeg *.webp)"
+            self, tr("Choose Avatar"), "", "Images (*.png *.jpg *.jpeg *.webp)"
         )
         if path:
             profile = self._user_manager.current_profile()

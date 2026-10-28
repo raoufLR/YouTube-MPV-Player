@@ -1,6 +1,6 @@
 import pytest
 
-from core.events import SearchStartedEvent, SearchCompletedEvent, SearchFailedEvent
+from core.events import SearchCompletedEvent, SearchFailedEvent, SearchStartedEvent
 
 
 class TestSearchService:

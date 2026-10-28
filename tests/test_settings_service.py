@@ -1,4 +1,3 @@
-import pytest
 
 from core.events import SettingsChangedEvent
 
@@ -43,6 +42,16 @@ class TestSettingsService:
         model = settings_service.get_model()
         assert model.volume == 42
         assert model.default_quality == "720p"
+
+    def test_get_model_and_export_are_detached_copies(self, settings_service):
+        settings_service.set("nested", {"items": [1, 2]})
+
+        model = settings_service.get_model()
+        exported = settings_service.export()
+        model._extra["nested"]["items"].append(3)
+        exported["nested"]["items"].append(4)
+
+        assert settings_service.get("nested") == {"items": [1, 2]}
 
     def test_reset(self, settings_service, event_bus):
         settings_service.set("volume", 99)

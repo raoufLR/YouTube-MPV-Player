@@ -1,6 +1,5 @@
-import pytest
 
-from core.events import PlaylistCreatedEvent, PlaylistUpdatedEvent, PlaylistDeletedEvent, WatchLaterToggledEvent
+from core.events import PlaylistCreatedEvent, PlaylistDeletedEvent, WatchLaterToggledEvent
 
 
 class TestPlaylistService:
