@@ -24,7 +24,8 @@ for item in ['build', 'dist']:
         print(f"[OK] Removed {item}/")
 
 # ── Verify required files exist ─────────────────────────────────────────
-required = ['mpv.exe', 'yt-dlp.exe', 'd3dcompiler_43.dll', 'youtube_video_player.spec']
+required = ['mpv.exe', 'yt-dlp.exe', 'd3dcompiler_43.dll', 'youtube_video_player.spec',
+            'icon/yt-mpv-icon-fusion.ico']
 for f in required:
     if os.path.exists(f):
         print(f"[OK] Found {f}")

@@ -34,12 +34,14 @@ python -m PyInstaller youtube_video_player.spec --clean --noconfirm
    - `mpv.exe` (video playback engine)
    - `yt-dlp.exe` (YouTube search and stream resolution)
    - `d3dcompiler_43.dll` (MPV rendering dependency)
+   - `icon/yt-mpv-icon-fusion.svg` (window, taskbar and sidebar logo)
    - Application code (including `services/`, `core/`, `ui/`, `models/`) and pinned dependencies
 3. **Outputs** a onefile build to `dist/youtube_video_player.exe`
 
 `User/` and `Cache/` are **not** bundled. They are created on first launch beside
 the executable, with per-profile data under `User/profiles/<opaque-id>/`.
-The spec sets `icon=None`, so the executable uses PyInstaller's default icon.
+The executable icon comes from `icon/yt-mpv-icon-fusion.ico`; regenerate it with
+`python tools/make_icon.py` after editing the SVG.
 
 ## Output
 

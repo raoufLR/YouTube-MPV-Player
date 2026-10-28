@@ -47,5 +47,5 @@ exe = EXE(
     name='youtube_video_player',
     debug=False,
     console=False,
-    icon=None,
+    icon='icon/yt-mpv-icon-fusion.ico',
 )
