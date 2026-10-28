@@ -105,11 +105,34 @@ def main(argv: Sequence[str] | None = None) -> int:
 
     qt_app = QApplication.instance() or QApplication([sys.argv[0], *qt_args])
 
+    from core.paths import data_root
+    from core.single_instance import LOCK_FILENAME, SingleInstanceGuard
     from ui.app_icon import app_icon
-    from ui.i18n import install_translations
+    from ui.i18n import install_translations, tr
 
     qt_app.setWindowIcon(app_icon())
     install_translations(qt_app)
+
+    # One copy per data directory: a second window would race the JSON stores.
+    guard = SingleInstanceGuard(os.path.join(data_root(), "User", LOCK_FILENAME))
+    if not guard.acquire():
+        if args.self_test:
+            _emit(
+                f"{APP_NAME} self-test FAILED: another instance is running",
+                error=True,
+            )
+            return 1
+        from PyQt6.QtWidgets import QMessageBox
+
+        QMessageBox.information(
+            None,
+            tr("Already running"),
+            tr(
+                "YouTube MPV Player is already running. "
+                "Close the other window before starting a new copy."
+            ),
+        )
+        return 0
 
     application = Application()
     exit_code = 0
@@ -146,6 +169,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     finally:
         if application.is_running():
             application.shutdown()
+        guard.release()
 
     return exit_code
 

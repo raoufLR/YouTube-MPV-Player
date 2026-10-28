@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- Single-instance guard: a PID-aware lock file in `User/` stops a second GUI
+  copy (or `--self-test` run) from sharing one profile directory. The second
+  launch shows a notice and exits; locks left by a crash are reclaimed.
+
 ### Fixed
 
 - Packaged builds now keep `User/`, `Cache/` and `Logs/` beside the executable
