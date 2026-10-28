@@ -17,6 +17,7 @@ from core.events import (
     EVENT_PLAYBACK_ERROR,
 )
 
+from .app_icon import app_icon
 from .event_dispatcher import QtEventDispatcher
 from .header_widget import HeaderWidget
 from .i18n import tr
@@ -65,6 +66,7 @@ class MainWindow(QMainWindow):
         self._subscriptions = []
 
         self.setWindowTitle(tr("YouTube MPV Player"))
+        self.setWindowIcon(app_icon())
         self.setGeometry(100, 100, 1280, 800)
         self.setMinimumSize(900, 600)
         self._settings_service = services.settings_service

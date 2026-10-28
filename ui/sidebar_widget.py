@@ -1,7 +1,14 @@
 from PyQt6.QtCore import QSize, Qt, pyqtSignal
-from PyQt6.QtWidgets import QLabel, QPushButton, QVBoxLayout, QWidget
+from PyQt6.QtWidgets import (
+    QHBoxLayout,
+    QLabel,
+    QPushButton,
+    QVBoxLayout,
+    QWidget,
+)
 
 from ui import icons
+from ui.app_icon import brand_pixmap
 from ui.i18n import tr
 
 
@@ -48,12 +55,20 @@ class SidebarWidget(QWidget):
 
         title_container = QWidget()
         title_container.setFixedHeight(56)
-        title_layout = QVBoxLayout(title_container)
-        title_layout.setContentsMargins(16, 0, 16, 0)
+        self._title_row = QHBoxLayout(title_container)
+        self._title_row.setContentsMargins(*self._title_margins(False))
+        self._title_row.setSpacing(10)
+
+        self._logo_label = QLabel()
+        self._logo_label.setPixmap(brand_pixmap(28))
+        self._logo_label.setFixedSize(28, 28)
+        self._logo_label.setAccessibleName("YouTube MPV Player")
+        self._title_row.addWidget(self._logo_label)
 
         self._title_label = QLabel("YouTube MPV")
         self._title_label.setObjectName("sidebarTitle")
-        title_layout.addWidget(self._title_label)
+        self._title_row.addWidget(self._title_label)
+        self._title_row.addStretch(1)
         layout.addWidget(title_container)
 
         layout.addSpacing(4)
@@ -101,6 +116,11 @@ class SidebarWidget(QWidget):
         self._labels[key] = label
         return btn
 
+    @staticmethod
+    def _title_margins(collapsed: bool) -> tuple[int, int, int, int]:
+        """Keep the logo centred in the narrow rail when the labels hide."""
+        return (22, 0, 0, 0) if collapsed else (16, 0, 16, 0)
+
     def set_collapsed(self, collapsed: bool):
         """Switch between the full sidebar and the icons-only rail."""
         collapsed = bool(collapsed)
@@ -117,6 +137,7 @@ class SidebarWidget(QWidget):
             button.style().unpolish(button)
             button.style().polish(button)
 
+        self._title_row.setContentsMargins(*self._title_margins(collapsed))
         self._title_label.setVisible(not collapsed)
         for section_label in self._section_labels:
             section_label.setVisible(not collapsed)

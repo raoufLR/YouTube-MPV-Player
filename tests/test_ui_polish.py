@@ -41,6 +41,25 @@ def test_sidebar_collapses_to_an_icon_rail(qapp):
         sidebar.hide()
 
 
+def test_sidebar_keeps_the_brand_logo_when_collapsed(qapp):
+    sidebar = SidebarWidget()
+    try:
+        assert not sidebar._logo_label.pixmap().isNull()
+        assert sidebar._title_row.contentsMargins().left() == 16
+
+        sidebar.set_collapsed(True)
+
+        assert not sidebar._logo_label.isHidden()
+        assert sidebar._title_row.contentsMargins().left() == 22
+
+        sidebar.set_collapsed(False)
+
+        assert not sidebar._logo_label.isHidden()
+        assert sidebar._title_row.contentsMargins().left() == 16
+    finally:
+        sidebar.hide()
+
+
 def test_sidebar_collapse_is_idempotent(qapp):
     sidebar = SidebarWidget()
     spy = QSignalSpy(sidebar.collapsed_changed)

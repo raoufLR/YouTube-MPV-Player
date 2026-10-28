@@ -31,7 +31,9 @@ a = Analysis(
         ('yt-dlp.exe', './'),
         ('d3dcompiler_43.dll', './'),
     ],
-    datas=[],  # User/ and Cache/ are auto-created at runtime
+    datas=[
+        ('icon/yt-mpv-icon-fusion.svg', 'icon'),
+    ],  # User/ and Cache/ are auto-created at runtime
 )
 
 pyz = PYZ(a.pure)

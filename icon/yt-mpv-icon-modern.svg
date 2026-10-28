@@ -1,0 +1,55 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="100%" height="100%">
+  <defs>
+    <!-- Background Gradient -->
+    <linearGradient id="bgGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#181822" />
+      <stop offset="100%" stop-color="#09090D" />
+    </linearGradient>
+
+    <!-- Main Accent Gradient -->
+    <linearGradient id="mainGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#e11d48" />
+      <stop offset="100%" stop-color="#2563eb" />
+    </linearGradient>
+
+    <!-- Outer Border Gradient -->
+    <linearGradient id="borderGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#e11d48" stop-opacity="0.8" />
+      <stop offset="100%" stop-color="#2563eb" stop-opacity="0.2" />
+    </linearGradient>
+
+    <!-- Soft Glow Filter -->
+    <filter id="glow" x="-20%" y="-20%" width="140%" height="140%">
+      <feGaussianBlur stdDeviation="28.5" result="blur" />
+      <feComposite in="SourceGraphic" in2="blur" operator="over" />
+    </filter>
+  </defs>
+
+  <!-- Container Box Body -->
+  <rect x="16" y="16" width="480" height="480" rx="138.2" ry="138.2" fill="url(#bgGrad)" stroke="url(#borderGrad)" stroke-width="6" />
+
+  <!-- Inner Dynamic Icon Graphics -->
+  <g filter="url(#glow)">
+    
+                    <!-- Outer Neon Orbit Circle -->
+                    <circle cx="256" cy="256" r="170" fill="none" stroke="#2563eb" stroke-width="4" stroke-dasharray="80 30" opacity="0.6" />
+                    
+                    <!-- MPV Fast Forward Triangles / Play Merged -->
+                    <g transform="translate(15, 0)">
+                        <!-- Back Trail Glow Triangle -->
+                        <polygon points="190,146 190,366 310,256" fill="#2563eb" opacity="0.4" />
+                        
+                        <!-- Main YouTube Solid Play Triangle -->
+                        <path d="M 230 140 L 230 372 L 360 256 Z" fill="url(#mainGrad)" />
+                        
+                        <!-- Sleek Internal Accent Line -->
+                        <path d="M 245 175 L 245 337 L 335 256 Z" fill="none" stroke="#FFFFFF" stroke-width="6" opacity="0.4" />
+                    </g>
+
+                    <!-- Speed Lines (Representing lightweight MPV performance) -->
+                    <line x1="110" y1="200" x2="160" y2="200" stroke="#e11d48" stroke-width="8" stroke-linecap="round" opacity="0.8"/>
+                    <line x1="90" y1="256" x2="155" y2="256" stroke="#FFFFFF" stroke-width="8" stroke-linecap="round" opacity="0.9"/>
+                    <line x1="120" y1="312" x2="165" y2="312" stroke="#2563eb" stroke-width="8" stroke-linecap="round" opacity="0.7"/>
+                
+  </g>
+</svg>

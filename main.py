@@ -105,8 +105,10 @@ def main(argv: Sequence[str] | None = None) -> int:
 
     qt_app = QApplication.instance() or QApplication([sys.argv[0], *qt_args])
 
+    from ui.app_icon import app_icon
     from ui.i18n import install_translations
 
+    qt_app.setWindowIcon(app_icon())
     install_translations(qt_app)
 
     application = Application()

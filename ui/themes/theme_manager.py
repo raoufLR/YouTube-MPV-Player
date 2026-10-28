@@ -553,8 +553,8 @@ QLabel#sidebarTitle {{
     font-size: 16px;
     font-weight: 700;
     color: {t.TEXT_PRIMARY};
-    padding: 16px;
-    background-color: {t.BG_SIDEBAR};
+    padding: 0;
+    background-color: transparent;
 }}
 
 QPushButton#navButton {{

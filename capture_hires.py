@@ -2,9 +2,10 @@
 
 import os
 import sys
+import time
 import traceback
 
-from PyQt6.QtCore import QPoint, QTimer
+from PyQt6.QtCore import QPoint, Qt, QTimer
 from PyQt6.QtGui import QPixmap, QRegion
 from PyQt6.QtWidgets import QApplication, QScrollArea, QWidget
 
@@ -46,15 +47,41 @@ def main():
         application.load_profile(profiles[0].name)
 
     window = MainWindow(application)
+    # Lay the window out with real platform fonts without mapping it to the
+    # screen, so the capture is not clamped to the desktop height.
+    window.setAttribute(Qt.WidgetAttribute.WA_DontShowOnScreen, True)
     window.show()
-    window.resize(1280, 720)
+    window.resize(1280, 750)
 
     steps = []
 
+    def section_ready(window, key: str) -> bool:
+        """True once *key* shows real cards instead of skeleton placeholders."""
+        from ui.components.skeleton import SkeletonWidget
+
+        page = window.page_registry.ensure("home")
+        section = page._sections.get(key)
+        if section is None:
+            return True
+        for index in range(section._scroll_layout.count()):
+            widget = section._scroll_layout.itemAt(index).widget()
+            if widget is not None:
+                return not isinstance(widget, SkeletonWidget)
+        return False
+
     def home():
         window.page_registry.show("home")
-        QTimer.singleShot(600, lambda: (
-            render_hires(window, "screenshot.png"), steps[0]()))
+        deadline = time.monotonic() + 30
+
+        def poll():
+            if section_ready(window, "recommended") or time.monotonic() > deadline:
+                # Let the last thumbnails paint before rendering.
+                QTimer.singleShot(900, lambda: (
+                    render_hires(window, "screenshot.png"), steps[0]()))
+            else:
+                QTimer.singleShot(250, poll)
+
+        QTimer.singleShot(500, poll)
 
     def settings_top():
         page = window.page_registry.ensure("settings")
