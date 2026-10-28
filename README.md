@@ -9,7 +9,7 @@
     <img alt="Python 3.14+" src="https://img.shields.io/badge/python-3.14%2B-blue">
     <img alt="PyQt6 6.11" src="https://img.shields.io/badge/PyQt6-6.11-41cd52">
     <img alt="Platform" src="https://img.shields.io/badge/platform-Windows-0078d4">
-    <img alt="Tests" src="https://img.shields.io/badge/tests-635-brightgreen">
+    <img alt="Tests" src="https://img.shields.io/badge/tests-641-brightgreen">
     <img alt="Ruff clean" src="https://img.shields.io/badge/lint-ruff%20clean-261230">
   </p>
 
@@ -292,7 +292,7 @@ YouTube-MPV-Player/
 │   ├── pages/                  # Eight pages (see architecture)
 │   └── components/             # Reusable widgets (video card, home section, skeleton)
 │
-├── tests/                      # 635 pytest tests (offscreen Qt)
+├── tests/                      # 641 pytest tests (offscreen Qt)
 ├── tools/                      # Performance benchmark harness
 │
 ├── User/                       # Runtime data (git-ignored)
@@ -318,7 +318,7 @@ python -m ruff check .                     # lint (E, F, I, UP, SIM, TCH)
 python main.py --self-test                 # headless bootstrap + service smoke test
 ```
 
-Current baseline: **634 passed, 1 skipped** out of 635 collected, **Ruff clean**, on Python 3.14.
+Current baseline: **640 passed, 1 skipped** out of 641 collected, **Ruff clean**, on Python 3.14.
 CI (`.github/workflows/ci.yml`) runs the suite offscreen on Windows for every push and pull request.
 
 The tests cover the service layer, playback orchestration and cancellation, MPV IPC, application

@@ -80,6 +80,10 @@ def asset_names() -> tuple[str, str]:
     return "yt-dlp", "yt-dlp.sha256"
 
 
+# yt-dlp publishes one combined checksum file instead of per-asset sidecars.
+SUMS_ASSET = "SHA2-256SUMS"
+
+
 # ---------------------------------------------------------------------------
 # Version handling
 # ---------------------------------------------------------------------------
@@ -130,6 +134,7 @@ class ReleaseInfo:
     url: str
     sha256_url: str = ""
     size: int = 0
+    checksum_asset: str = ""
 
 
 class GithubReleaseBackend:
@@ -154,6 +159,7 @@ class GithubReleaseBackend:
         binary_name, hash_name = asset_names()
         url = ""
         sha_url = ""
+        sums_url = ""
         size = 0
         for asset in payload.get("assets", []):
             if not isinstance(asset, dict):
@@ -164,11 +170,22 @@ class GithubReleaseBackend:
                 url, size = link, int(asset.get("size", 0) or 0)
             elif name == hash_name:
                 sha_url = link
+            elif name == SUMS_ASSET:
+                sums_url = link
         if not url:
             _logger.warning("No %s asset in the latest release", binary_name)
             return None
+        # Prefer a per-asset sidecar; fall back to the combined SHA2-256SUMS.
+        checksum_asset = ""
+        if not sha_url and sums_url:
+            sha_url = sums_url
+            checksum_asset = binary_name
         return ReleaseInfo(
-            version=version, url=url, sha256_url=sha_url, size=size
+            version=version,
+            url=url,
+            sha256_url=sha_url,
+            size=size,
+            checksum_asset=checksum_asset,
         )
 
     def download(self, url: str, dest_path: str, max_bytes: int) -> str:
@@ -193,15 +210,28 @@ class GithubReleaseBackend:
             response.close()
         return digest.hexdigest()
 
-    def fetch_sha256(self, url: str) -> str:
-        """Read a published ``.sha256`` sidecar; first token wins."""
+    def fetch_sha256(self, url: str, asset_name: str = "") -> str:
+        """Read a published checksum file and return the hash for *asset_name*.
+
+        Sidecars contain a single token; ``SHA2-256SUMS`` lists
+        ``<hash>  <filename>`` lines, so the matching filename is selected.
+        """
         response = requests.get(url, timeout=CHECK_TIMEOUT)
         response.raise_for_status()
         text = response.text or ""
-        first = text.split(" ", 1)[0].strip()
-        if not re.fullmatch(r"[0-9a-fA-F]{64}", first):
-            raise ValueError("checksum sidecar does not contain a sha256")
-        return first.lower()
+        for line in text.splitlines():
+            parts = line.split()
+            if not parts:
+                continue
+            digest = parts[0].strip()
+            if not re.fullmatch(r"[0-9a-fA-F]{64}", digest):
+                continue
+            if asset_name:
+                names = [part.lstrip("*") for part in parts[1:]]
+                if asset_name not in names:
+                    continue
+            return digest.lower()
+        raise ValueError("checksum file does not contain the advertised asset")
 
 
 # ---------------------------------------------------------------------------
@@ -502,7 +532,9 @@ class YtDlpUpdateService:
             safe_hash_url = self._validate_url(release.sha256_url)
             if not safe_hash_url:
                 raise ValueError("checksum URL refused by host allowlist")
-            expected = self._backend.fetch_sha256(safe_hash_url)
+            expected = self._backend.fetch_sha256(
+                safe_hash_url, release.checksum_asset
+            )
             if not expected or not re.fullmatch(r"[0-9a-fA-F]{64}", expected):
                 raise ValueError("checksum sidecar missing or malformed")
             expected = expected.lower()

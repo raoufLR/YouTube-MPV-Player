@@ -5,6 +5,20 @@ All notable changes to YouTube MPV Player are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Fixed
+
+- Packaged builds now keep `User/`, `Cache/` and `Logs/` beside the executable
+  instead of trusting the process working directory. Launching the `.exe` from
+  a shortcut or from a read-only directory used to abort startup with
+  `[WinError 5] Access is denied: 'Logs'`.
+- File logging falls back to console output when the log directory cannot be
+  created or written, so a logging problem can never block the UI.
+- yt-dlp updates now verify downloads against the published `SHA2-256SUMS`
+  asset when a per-asset `.sha256` sidecar is unavailable, instead of accepting
+  the payload on its size alone.
+
 ## [1.0.0] — 2026-10-24
 
 First production release. Feature-complete for the planned scope: search,

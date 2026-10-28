@@ -24,8 +24,6 @@ class LoggingService:
                  console_level: int = logging.INFO,
                  file_level: int = logging.DEBUG):
         self._log_dir = log_dir
-        os.makedirs(log_dir, exist_ok=True)
-        ensure_private_dir(log_dir)
 
         root = logging.getLogger()
         root.setLevel(logging.DEBUG)
@@ -38,20 +36,37 @@ class LoggingService:
                 datefmt="%H:%M:%S",
             ))
             root.addHandler(console)
+            self._install_file_handler(log_dir, file_level)
 
+        # Also covers handlers installed by an embedding host before startup.
+        install_redaction(root)
+
+    def _install_file_handler(self, log_dir: str, file_level: int) -> None:
+        """Attach the rotating file handler, staying usable when it is not.
+
+        The working directory of a launched shortcut is not guaranteed to be
+        writable; failing to create ``Logs/`` must not prevent the UI from
+        starting, so the app falls back to console logging.
+        """
+        try:
+            os.makedirs(log_dir, exist_ok=True)
+            ensure_private_dir(log_dir)
             file_path = os.path.join(log_dir, LOG_FILE)
             file_handler = RotatingFileHandler(
                 file_path, maxBytes=MAX_BYTES, backupCount=BACKUP_COUNT
             )
-            file_handler.setLevel(file_level)
-            file_handler.setFormatter(logging.Formatter(
-                "%(asctime)s [%(levelname)s] %(name)s (%(filename)s:%(lineno)d): %(message)s"
-            ))
-            root.addHandler(file_handler)
             ensure_private_file(file_path)
+        except OSError as exc:
+            logging.getLogger(__name__).warning(
+                "File logging disabled (%s): %s", log_dir, exc
+            )
+            return
 
-        # Also covers handlers installed by an embedding host before startup.
-        install_redaction(root)
+        file_handler.setLevel(file_level)
+        file_handler.setFormatter(logging.Formatter(
+            "%(asctime)s [%(levelname)s] %(name)s (%(filename)s:%(lineno)d): %(message)s"
+        ))
+        logging.getLogger().addHandler(file_handler)
 
     def get_logger(self, name: str) -> logging.Logger:
         return logging.getLogger(name)

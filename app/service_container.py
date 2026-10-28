@@ -1,4 +1,7 @@
 import logging
+import os
+
+from core.paths import data_root
 
 _logger = logging.getLogger(__name__)
 
@@ -46,11 +49,14 @@ class ServiceContainer:
         from services.ytdlp_update_service import YtDlpUpdateService
         from youtube_api import YouTubeAPI
 
-        logging_service = LoggingService()
+        root = data_root()
+        logging_service = LoggingService(log_dir=os.path.join(root, "Logs"))
         logger = logging_service.get_logger(__name__)
         logger.info("Starting service initialization")
 
-        user_manager = UserManagerService(base_dir="User", event_bus=self._event_bus)
+        user_manager = UserManagerService(
+            base_dir=os.path.join(root, "User"), event_bus=self._event_bus
+        )
         profile_dir = user_manager.current_profile_dir()
 
         settings = SettingsService(event_bus=self._event_bus, data_dir=profile_dir)
@@ -58,7 +64,7 @@ class ServiceContainer:
         update = YtDlpUpdateService(
             event_bus=self._event_bus,
             settings_service=settings,
-            data_dir="User",
+            data_dir=os.path.join(root, "User"),
             logger=logging_service.get_logger("services.ytdlp_update"),
         )
         youtube_api = YouTubeAPI(

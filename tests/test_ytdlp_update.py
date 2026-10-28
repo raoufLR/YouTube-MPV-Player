@@ -13,8 +13,12 @@ import os
 import time
 from types import SimpleNamespace
 
+import pytest
+
 from services.ytdlp_update_service import (
     CHECK_INTERVAL,
+    SUMS_ASSET,
+    GithubReleaseBackend,
     ReleaseInfo,
     YtDlpUpdateService,
     asset_names,
@@ -59,7 +63,7 @@ class FakeBackend:
             handle.write(self.payload)
         return hashlib.sha256(self.payload).hexdigest()
 
-    def fetch_sha256(self, url):
+    def fetch_sha256(self, url, asset_name=""):
         self.sha_calls.append(url)
         digest = hashlib.sha256(self.payload).hexdigest()
         return digest if self.sha_fit else ("f" * 64)
@@ -127,6 +131,64 @@ def test_asset_names_follow_platform(monkeypatch):
     monkeypatch.setattr(module.sys, "platform", "linux")
     assert asset_names() == ("yt-dlp", "yt-dlp.sha256")
     assert binary_file_name() == "yt-dlp"
+
+
+class _FakeResponse:
+    def __init__(self, *, json_payload=None, text=""):
+        self._json = json_payload
+        self.text = text
+
+    def raise_for_status(self):
+        return None
+
+    def json(self):
+        return self._json
+
+
+def test_release_falls_back_to_combined_checksums(monkeypatch):
+    binary, _ = asset_names()
+    sums_url = (
+        "https://github.com/yt-dlp/yt-dlp/releases/download/"
+        f"{NEW_VERSION}/{SUMS_ASSET}"
+    )
+    payload = {
+        "tag_name": NEW_VERSION,
+        "assets": [
+            {
+                "name": binary,
+                "browser_download_url": DOWNLOAD_URL,
+                "size": len(FAKE_PAYLOAD),
+            },
+            {"name": SUMS_ASSET, "browser_download_url": sums_url},
+        ],
+    }
+    monkeypatch.setattr(
+        "services.ytdlp_update_service.requests.get",
+        lambda *args, **kwargs: _FakeResponse(json_payload=payload),
+    )
+
+    release = GithubReleaseBackend().fetch_latest_release()
+
+    assert release is not None
+    assert release.sha256_url == sums_url
+    assert release.checksum_asset == binary
+
+
+def test_combined_checksum_selects_the_matching_asset(monkeypatch):
+    body = (
+        f"{'a' * 64}  yt-dlp\n"
+        f"{'b' * 64}  yt-dlp.exe\n"
+    )
+    monkeypatch.setattr(
+        "services.ytdlp_update_service.requests.get",
+        lambda *args, **kwargs: _FakeResponse(text=body),
+    )
+    backend = GithubReleaseBackend()
+
+    assert backend.fetch_sha256("https://github.com/checksums", "yt-dlp.exe") == "b" * 64
+    assert backend.fetch_sha256("https://github.com/checksums") == "a" * 64
+    with pytest.raises(ValueError):
+        backend.fetch_sha256("https://github.com/checksums", "missing.exe")
 
 
 # ---------------------------------------------------------------------------
